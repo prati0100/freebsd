@@ -1,11 +1,11 @@
 /******************************************************************************
  * gnttab.c
- * 
+ *
  * Two sets of functionality:
  * 1. Granting foreign access to our memory reservation.
  * 2. Accessing others' memory reservations via grant references.
  * (i.e., mechanisms for both sender and recipient of grant references)
- * 
+ *
  * Copyright (c) 2005, Christopher Clark
  * Copyright (c) 2004, K A Fraser
  */
@@ -231,7 +231,7 @@ gnttab_end_foreign_access_references(u_int count, grant_ref_t *refs)
 			head = *refs;
 		} else {
 			/*
-			 * XXX This needs to be fixed so that the ref 
+			 * XXX This needs to be fixed so that the ref
 			 * is placed on a list to be freed up later.
 			 */
 			printf("%s: WARNING: leaking g.e. still in use!\n",
@@ -645,56 +645,37 @@ xen_bus_dmamap_load_callback(void *callback_arg, bus_dma_segment_t
 		*segs, int	nseg, int error)
 {
 	domid_t domid;
-	grant_ref_t ref;
+	grant_ref_t *refs;
 	int i;
 
 	if(error) {
 		return;
 	}
 
-	if(nseg != 1) {
-		/* Set callback_arg to 0 to indicate an error. */
-		*callback_arg = 0; /* XXX can a grant ref ever be 0? */
-		return;
+	refs = callback_arg;
+
+	for (i = 0; i < nseg; i++) {
+		refs[i].frame = segs[i].ds_addr;
+		/* XXX Should I call wmb() for each iteration of the loop or is it ok if I
+		 * call it just once after the loop. */
+		wmb();
 	}
-
-	domid = *callback_arg;
-
-	gnttab_grant_foreign_access(domid, segs[i].ds_addr, 0, &ref);
-	*callback_arg = ref;
 }
 
 int
 xen_bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void	*buf,
 		bus_size_t buflen, bus_dmamap_callback_t *callback,
-		void *callback_arg, int flags, grant_ref_t *ref)
+		void *callback_arg, int flags, grant_ref_t *refs)
 {
 	void *xen_callback_arg;
 	domid_t domid;
 	int error;
-	unsigned int i;
-
-	/*
-	 * The bus_dma flags can go up to 8 bits. We can use the remaining bits to
-	 * encode the domid. domid is a 16 bit integer so it is not a problem.
-	 */
-
-	domid = flags >> 16;
-	flags &= 0xffff;
-	i = domid;
 
 	error = bus_dmamap_load(dmat, map, buf, buflen, xen_bus_dmamap_load_callback,
-			&i, flags);
+			refs, flags);
 	if(error) {
 		return error;
 	}
-
-	/*
-	 * If the grant ref allocation failed, i will be set 0 by the callback,
-	 * indicating an error.
-	 * XXX is this even right?
-	 */
-	*ref = *i;
 
 	return 0;
 }
@@ -729,7 +710,7 @@ granttable_identify(driver_t *driver __unused, device_t parent)
  *
  * \return  Always returns 0 indicating success.
  */
-static int 
+static int
 granttable_probe(device_t dev)
 {
 

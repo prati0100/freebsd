@@ -586,6 +586,61 @@ gnttab_expand(unsigned int req_entries)
 	return (error);
 }
 
+int
+xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
+		bus_addr_t boundary, bus_addr_t lowaddr, bus_addr_t highaddr,
+		bus_dma_filter_t *filtfunc, void *filtfuncarg,	bus_size_t maxsize,
+		int nsegments,	bus_size_t maxsegsz, int flags,
+		bus_dma_lock_t	*lockfunc, void	*lockfuncarg, bus_dma_tag_t *dmat,
+		grant_ref_t **refs)
+{
+	domid_t domid;
+	int i, j, error;
+
+	if (maxsegsz < PAGE_SIZE) {
+		return (EINVAL);
+	}
+
+	domid = flags >> 16;
+	flags &= 0xffff;
+
+	/* Allocate a new dma tag. */
+	error = bus_dma_tag_create(parent, alignment, boundary, lowaddr, highaddr,
+			filtfunc, filterarg, maxsize, nsegments, maxsegsz, flags, lockfunc,
+			lockfuncarg, dmat);
+	if (error) {
+		return error;
+	}
+
+	/* Allocate the grant references for each segment. */
+	*refs = malloc(nsegments*sizeof(grant_ref_t), M_DEVBUF, M_NOWAIT);
+	if((*refs) == NULL) {
+		bus_dma_tag_destroy(dmat);
+		return (ENOMEM);
+	}
+
+	/*
+	 * Create entries in the grant table for each segment. The frame number is set
+	 * to 0 for now. It will be updated when the dma map is loaded.
+	 */
+	for (i = 0; i < nsegments; i++) {
+		error = gnttab_grant_foreign_access(domid, 0, 0, (*refs[i]));
+		if (error) {
+			for (j = 0; j <= i; j++) {
+				gnttab_end_foreign_access_ref((*refs[j]));
+				free(*refs);
+				*refs = NULL;
+				bus_dma_tag_destroy(dmat);
+				return error;
+			}
+		}
+	}
+
+	/* XXX Leaving cleaning up the refs array to the caller. Is it ok? */
+
+	return 0;
+}
+
 static void
 xen_bus_dmamap_load_callback(void *callback_arg, bus_dma_segment_t
 		*segs, int	nseg, int error)

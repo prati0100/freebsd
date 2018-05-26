@@ -709,6 +709,20 @@ xen_bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void	*buf,
 	return 0;
 }
 
+void
+xen_bus_dmamap_unload(bus_dma_tag_t dmat. bus_dmamap_t map, grant_ref_t *refs,
+		unsigned int refcount)
+{
+	unsigned int i;
+
+	for (i = 0; i < refcount; i++) {
+		refs[i].frame = 0;
+		wmb();
+	}
+
+	bus_dmamap_unload(dmat, map);
+}
+
 MTX_SYSINIT(gnttab, &gnttab_list_lock, "GNTTAB LOCK", MTX_DEF | MTX_RECURSE);
 
 /*------------------ Private Device Attachment Functions  --------------------*/

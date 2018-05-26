@@ -137,4 +137,7 @@ int xen_bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void	*buf,
  		bus_size_t buflen, bus_dmamap_callback_t *callback,
  		void *callback_arg, int flags);
 
+void xen_bus_dmamap_unload(bus_dma_tag_t dmat. bus_dmamap_t map,
+		grant_ref_t *refs, unsigned int refcount);
+
 #endif /* __ASM_GNTTAB_H__ */

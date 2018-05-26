@@ -628,7 +628,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 		if (error) {
 			for (j = 0; j <= i; j++) {
 				gnttab_end_foreign_access_ref((*refs[j]));
-				free(*refs);
+				free(*refs, M_DEVBUF);
 				*refs = NULL;
 				bus_dma_tag_destroy(dmat);
 				return error;

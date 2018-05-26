@@ -684,7 +684,7 @@ xen_bus_dmamap_load_callback(void *callback_arg, bus_dma_segment_t
 	refs = callback_arg;
 
 	for (i = 0; i < nseg; i++) {
-		refs[i].frame = segs[i].ds_addr;
+		shared[refs[i]].frame = segs[i].ds_addr;
 		/* XXX Should I call wmb() for each iteration of the loop or is it ok if I
 		 * call it just once after the loop. */
 		wmb();
@@ -716,7 +716,7 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat. bus_dmamap_t map, grant_ref_t *refs,
 	unsigned int i;
 
 	for (i = 0; i < refcount; i++) {
-		refs[i].frame = 0;
+		shared[refs[i]].frame = 0;
 		wmb();
 	}
 

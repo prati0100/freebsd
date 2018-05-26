@@ -128,7 +128,10 @@ int xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
  	 		bus_addr_t boundary, bus_addr_t lowaddr, bus_addr_t highaddr,
  	 		bus_dma_filter_t *filtfunc, void *filtfuncarg,	bus_size_t maxsize,
  	 		int nsegments,	bus_size_t maxsegsz, int flags,
- 	 		bus_dma_lock_t	*lockfunc, void	*lockfuncarg, bus_dma_tag_t *dmat);	
+ 	 		bus_dma_lock_t	*lockfunc, void	*lockfuncarg, bus_dma_tag_t *dmat);
+
+int xen_bus_dma_tag_destroy(bus_dma_tag_t dmat, grant_ref_t *refs,
+		unsigned int refcount);
 
 int xen_bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void	*buf,
  		bus_size_t buflen, bus_dmamap_callback_t *callback,

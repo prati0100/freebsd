@@ -636,8 +636,6 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 		}
 	}
 
-	/* XXX Leaving cleaning up the refs array to the caller. Is it ok? */
-
 	return 0;
 }
 

@@ -641,6 +641,36 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	return 0;
 }
 
+int
+xen_bus_dma_tag_destroy(bus_dma_tag_t dmat, grant_ref_t *refs,
+		unsigned int refcount)
+{
+	/*
+	 * XXX We have to trust the caller to pass the correct refs array and the
+	 * correct refcount corresponding to the dma tag. Sounds like bad design to
+	 * me. Any thoughts?
+	 */
+
+	int error;
+
+	if (refs == NULL) {
+		return (EINVAL);
+	}
+
+	error = bus_dma_tag_destroy(dmat);
+	if (error) {
+		return error;
+	}
+
+	/* Reclaim the grant references. */
+	gnttab_end_foreign_access_references(refcount, refs);
+
+	/* Free the refs array. */
+	free(refs, M_DEVBUF);
+
+	return 0;
+}
+
 static void
 xen_bus_dmamap_load_callback(void *callback_arg, bus_dma_segment_t
 		*segs, int	nseg, int error)

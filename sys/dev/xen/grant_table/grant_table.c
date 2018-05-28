@@ -695,6 +695,14 @@ xen_bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void	*buf,
 		bus_size_t buflen, bus_dmamap_callback_t *callback,
 		void *callback_arg, int flags, grant_ref_t *refs)
 {
+	/*
+	 * XXX Right now, there is no way to call the driver's callback because we
+	 * pass xen_bus_dmamap_load_callback to the load operation. There are two
+	 * options here, either remove the callback from the function parameters.
+	 * Or, we can define a struct xen_callback which will contain the refs array,
+	 * the driver's callback function pointer and the driver's callback arg.
+	 * Any thoughts?
+	 */
 	void *xen_callback_arg;
 	domid_t domid;
 	int error;

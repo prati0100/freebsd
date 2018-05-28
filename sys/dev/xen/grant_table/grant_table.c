@@ -595,7 +595,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 		grant_ref_t **refs)
 {
 	domid_t domid;
-	int i, j, error;
+	int i, error;
 
 	if (maxsegsz < PAGE_SIZE) {
 		return (EINVAL);
@@ -624,17 +624,15 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	 * to 0 for now. It will be updated when the dma map is loaded.
 	 */
 	for (i = 0; i < nsegments; i++) {
-		error = gnttab_grant_foreign_access(domid, 0, 0, (*refs[i]));
+		error = gnttab_grant_foreign_access(domid, 0, 0, (*refs)[i]);
 		if (error) {
-			for (j = 0; j <= i; j++) {
-				gnttab_end_foreign_access_ref((*refs[j]));
-				free(*refs, M_DEVBUF);
-				*refs = NULL;
-				bus_dma_tag_destroy(dmat);
-				return error;
+			gnttab_end_foreign_access_references((unsigned int)i, *refs);
+			free(*refs, M_DEVBUF);
+			*refs = NULL;
+			bus_dma_tag_destroy(dmat);
+			return error;
 			}
 		}
-	}
 
 	return 0;
 }

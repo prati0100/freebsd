@@ -644,7 +644,8 @@ xen_bus_dma_tag_destroy(bus_dma_tag_t dmat, grant_ref_t *refs,
 	/*
 	 * XXX We have to trust the caller to pass the correct refs array and the
 	 * correct refcount corresponding to the dma tag. Sounds like bad design to
-	 * me. Any thoughts?
+	 * me. Maybe we can create a custom dma tag for xen, xen_bus_dma_tag which
+	 * will contain the bus_dma_tag and the references array. Any thoughts?
 	 */
 
 	int error;

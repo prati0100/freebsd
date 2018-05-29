@@ -51,6 +51,20 @@ static int gnttab_free_count;
 static grant_ref_t gnttab_free_head;
 static struct mtx gnttab_list_lock;
 
+struct xen_callback_arg {
+	/*
+	 * The callback function specified by the client driver. Using a void pointer
+	 * and not bus_dmamap_callback_t so we can use this struct with both
+	 * bus_dmamap_load() and bus_dmamap_load_mbuf().
+	 */
+	void *client_callback;
+	/* The client driver's callback arg. */
+	void *client_callback_arg;
+
+	/* Xen's callback arg. */
+	void *xen_arg;
+};
+
 /*
  * Resource representing allocated physical address space
  * for the grant table metainfo
@@ -672,15 +686,19 @@ static void
 xen_bus_dmamap_load_callback(void *callback_arg, bus_dma_segment_t
 		*segs, int	nseg, int error)
 {
-	domid_t domid;
 	grant_ref_t *refs;
+	struct xen_callback_arg *arg;
+	bus_dmamap_callback_t *callback;
 	int i;
 
 	if(error) {
 		return;
 	}
 
-	refs = callback_arg;
+	arg = callback_arg;
+
+	refs = arg->xen_arg;
+	callback = arg->client_callback;
 
 	for (i = 0; i < nseg; i++) {
 		shared[refs[i]].frame = segs[i].ds_addr;
@@ -688,6 +706,9 @@ xen_bus_dmamap_load_callback(void *callback_arg, bus_dma_segment_t
 		 * call it just once after the loop. */
 		wmb();
 	}
+
+	/* Time to call the client's callback. */
+	(*callback)(arg->client_callback_arg, segs, nseg, error);
 }
 
 int
@@ -695,20 +716,15 @@ xen_bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void	*buf,
 		bus_size_t buflen, bus_dmamap_callback_t *callback,
 		void *callback_arg, int flags, grant_ref_t *refs)
 {
-	/*
-	 * XXX Right now, there is no way to call the driver's callback because we
-	 * pass xen_bus_dmamap_load_callback to the load operation. There are two
-	 * options here, either remove the callback from the function parameters.
-	 * Or, we can define a struct xen_callback which will contain the refs array,
-	 * the driver's callback function pointer and the driver's callback arg.
-	 * Any thoughts?
-	 */
-	void *xen_callback_arg;
-	domid_t domid;
+	struct xen_callback_arg arg;
 	int error;
 
+	arg.client_callback = callback;
+	arg.client_callback_arg = callback_arg;
+	arg.xen_arg = refs;
+
 	error = bus_dmamap_load(dmat, map, buf, buflen, xen_bus_dmamap_load_callback,
-			refs, flags);
+			&arg, flags);
 	if(error) {
 		return error;
 	}

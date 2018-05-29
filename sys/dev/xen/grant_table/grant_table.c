@@ -620,7 +620,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 
 	/* Allocate a new dma tag. */
 	error = bus_dma_tag_create(parent, alignment, boundary, lowaddr, highaddr,
-			filtfunc, filterarg, maxsize, nsegments, maxsegsz, flags, lockfunc,
+			filtfunc, filtfuncarg, maxsize, nsegments, maxsegsz, flags, lockfunc,
 			lockfuncarg, dmat);
 	if (error) {
 		return error;
@@ -629,7 +629,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	/* Allocate the grant references for each segment. */
 	*refs = malloc(nsegments*sizeof(grant_ref_t), M_DEVBUF, M_NOWAIT);
 	if((*refs) == NULL) {
-		bus_dma_tag_destroy(dmat);
+		bus_dma_tag_destroy(*dmat);
 		return (ENOMEM);
 	}
 
@@ -638,12 +638,12 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	 * to 0 for now. It will be updated when the dma map is loaded.
 	 */
 	for (i = 0; i < nsegments; i++) {
-		error = gnttab_grant_foreign_access(domid, 0, 0, (*refs)[i]);
+		error = gnttab_grant_foreign_access(domid, 0, 0, (*refs)+i);
 		if (error) {
 			gnttab_end_foreign_access_references((unsigned int)i, *refs);
 			free(*refs, M_DEVBUF);
 			*refs = NULL;
-			bus_dma_tag_destroy(dmat);
+			bus_dma_tag_destroy(*dmat);
 			return error;
 			}
 		}
@@ -733,7 +733,7 @@ xen_bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void	*buf,
 }
 
 void
-xen_bus_dmamap_unload(bus_dma_tag_t dmat. bus_dmamap_t map, grant_ref_t *refs,
+xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map, grant_ref_t *refs,
 		unsigned int refcount)
 {
 	unsigned int i;

@@ -711,6 +711,37 @@ xen_bus_dmamap_load_callback(void *callback_arg, bus_dma_segment_t
 	(*callback)(arg->client_callback_arg, segs, nseg, error);
 }
 
+static void
+xen_bus_dmamap_load_mbuf_callback(void *callback_arg, bus_dma_segment_t *segs,
+		int nseg, bus_size_t mapsize, int error)
+{
+	grant_ref_t *refs;
+	struct xen_callback_arg *arg;
+	bus_dmamap_callback_t *callback;
+	int i;
+
+	if(error) {
+		(*callback)(arg->client_callback_arg, segs, nseg, mapsize, error);
+		return;
+	}
+
+	arg = callback_arg;
+
+	refs = arg->xen_arg;
+	callback = arg->client_callback;
+
+	for (i = 0; i < nseg; i++) {
+		shared[refs[i]].frame = segs[i].ds_addr;
+		/* XXX Should I call wmb() for each iteration of the loop or is it ok if I
+		 * call it just once after the loop. */
+		wmb();
+	}
+
+	/* Time to call the client's callback. */
+	(*callback)(arg->client_callback_arg, segs, nseg, mapsize, error);
+}
+
+
 int
 xen_bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void	*buf,
 		bus_size_t buflen, bus_dmamap_callback_t *callback,
@@ -725,6 +756,27 @@ xen_bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void	*buf,
 
 	error = bus_dmamap_load(dmat, map, buf, buflen, xen_bus_dmamap_load_callback,
 			&arg, flags);
+	if(error) {
+		return error;
+	}
+
+	return 0;
+}
+
+int
+xen_bus_dmamap_load_mbuf(bus_dma_tag_t	dmat, bus_dmamap_t map,
+	 struct	mbuf *mbuf, bus_dmamap_callback2_t *callback,
+	 void *callback_arg, int flags, grant_ref_t *refs)
+{
+	struct xen_callback_arg arg;
+	int error;
+
+	arg.client_callback = callback;
+	arg.client_callback_arg = callback_arg;
+	arg.xen_arg = refs;
+
+	error = bus_dmamap_load_mbuf(dmat, map, mbuf,
+			xen_bus_dmamap_load_mbuf_callback, &arg, flags);
 	if(error) {
 		return error;
 	}

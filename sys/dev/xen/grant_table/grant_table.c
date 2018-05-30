@@ -692,6 +692,7 @@ xen_bus_dmamap_load_callback(void *callback_arg, bus_dma_segment_t
 	int i;
 
 	if(error) {
+		(*callback)(arg->client_callback_arg, segs, nseg, error);
 		return;
 	}
 

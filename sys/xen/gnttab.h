@@ -139,6 +139,10 @@ int xen_bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void	*buf,
  		bus_size_t buflen, bus_dmamap_callback_t *callback,
  		void *callback_arg, int flags, grant_ref_t *refs);
 
+int xen_bus_dmamap_load_mbuf(bus_dma_tag_t	dmat, bus_dmamap_t map,
+		struct	mbuf *mbuf, bus_dmamap_callback2_t *callback,
+		void *callback_arg, int flags, grant_ref_t *refs);
+
 void xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map,
 		grant_ref_t *refs, unsigned int refcount);
 

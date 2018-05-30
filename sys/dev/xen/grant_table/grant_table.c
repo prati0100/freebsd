@@ -683,8 +683,8 @@ xen_bus_dma_tag_destroy(bus_dma_tag_t dmat, grant_ref_t *refs,
 }
 
 static void
-xen_bus_dmamap_load_callback(void *callback_arg, bus_dma_segment_t
-		*segs, int	nseg, int error)
+xen_bus_dmamap_load_callback(void *callback_arg, bus_dma_segment_t *segs,
+		int nseg, int error)
 {
 	grant_ref_t *refs;
 	struct xen_callback_arg *arg;
@@ -766,8 +766,8 @@ xen_bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void	*buf,
 
 int
 xen_bus_dmamap_load_mbuf(bus_dma_tag_t	dmat, bus_dmamap_t map,
-	 struct	mbuf *mbuf, bus_dmamap_callback2_t *callback,
-	 void *callback_arg, int flags, grant_ref_t *refs)
+		struct mbuf *mbuf, bus_dmamap_callback2_t *callback,
+		void *callback_arg, int flags, grant_ref_t *refs)
 {
 	struct xen_callback_arg arg;
 	int error;

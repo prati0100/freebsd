@@ -645,9 +645,8 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 			*refs = NULL;
 			bus_dma_tag_destroy(*dmat);
 			return error;
-			}
 		}
-
+	}
 	return 0;
 }
 

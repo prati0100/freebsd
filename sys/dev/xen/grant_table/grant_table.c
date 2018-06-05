@@ -623,12 +623,12 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 			filtfunc, filtfuncarg, maxsize, nsegments, maxsegsz, flags, lockfunc,
 			lockfuncarg, dmat);
 	if (error) {
-		return error;
+		return (error);
 	}
 
 	/* Allocate the grant references for each segment. */
 	*refs = malloc(nsegments*sizeof(grant_ref_t), M_DEVBUF, M_NOWAIT);
-	if((*refs) == NULL) {
+	if ((*refs) == NULL) {
 		bus_dma_tag_destroy(*dmat);
 		return (ENOMEM);
 	}
@@ -644,7 +644,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 			free(*refs, M_DEVBUF);
 			*refs = NULL;
 			bus_dma_tag_destroy(*dmat);
-			return error;
+			return (error);
 		}
 	}
 	return 0;
@@ -678,7 +678,7 @@ xen_bus_dma_tag_destroy(bus_dma_tag_t dmat, grant_ref_t *refs,
 
 	error = bus_dma_tag_destroy(dmat);
 	if (error) {
-		return error;
+		return (error);
 	}
 
 	/* Reclaim the grant references. */
@@ -699,7 +699,7 @@ xen_bus_dmamap_load_callback(void *callback_arg, bus_dma_segment_t *segs,
 	bus_dmamap_callback_t *callback;
 	int i;
 
-	if(error) {
+	if (error) {
 		(*callback)(arg->client_callback_arg, segs, nseg, error);
 		return;
 	}
@@ -729,7 +729,7 @@ xen_bus_dmamap_load_mbuf_callback(void *callback_arg, bus_dma_segment_t *segs,
 	bus_dmamap_callback_t *callback;
 	int i;
 
-	if(error) {
+	if (error) {
 		(*callback)(arg->client_callback_arg, segs, nseg, mapsize, error);
 		return;
 	}
@@ -765,11 +765,11 @@ xen_bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void	*buf,
 
 	error = bus_dmamap_load(dmat, map, buf, buflen, xen_bus_dmamap_load_callback,
 			&arg, flags);
-	if(error) {
-		return error;
+	if (error) {
+		return (error);
 	}
 
-	return 0;
+	return (0);
 }
 
 int
@@ -786,11 +786,11 @@ xen_bus_dmamap_load_mbuf(bus_dma_tag_t	dmat, bus_dmamap_t map,
 
 	error = bus_dmamap_load_mbuf(dmat, map, mbuf,
 			xen_bus_dmamap_load_mbuf_callback, &arg, flags);
-	if(error) {
-		return error;
+	if (error) {
+		return (error);
 	}
 
-	return 0;
+	return (0);
 }
 
 void

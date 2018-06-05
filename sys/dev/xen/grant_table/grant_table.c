@@ -650,26 +650,10 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	return 0;
 }
 
-/*
- * XXX Should I implement xen_bus_dmamap_create() and destroy()? The way I see
- * it, these would directly call the corresponding bus_dmamap_create() or
- * destroy() and return the error code. No xen-specific code needs to be there.
- * So is it fine if the driver uses bus_dmamap_create() and not xen_bus_dmamap_create()?
- * It will lead to an inconsistent design, where some functions have the
- * xen_ prefix and some don't so I am leaning towards implementing them.
- */
-
 int
 xen_bus_dma_tag_destroy(bus_dma_tag_t dmat, grant_ref_t *refs,
 		unsigned int refcount)
 {
-	/*
-	 * XXX We have to trust the caller to pass the correct refs array and the
-	 * correct refcount corresponding to the dma tag. Sounds like bad design to
-	 * me. Maybe we can create a custom dma tag for xen, xen_bus_dma_tag which
-	 * will contain the bus_dma_tag and the references array. Any thoughts?
-	 */
-
 	int error;
 
 	if (refs == NULL) {

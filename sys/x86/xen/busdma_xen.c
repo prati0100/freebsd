@@ -50,7 +50,7 @@ struct xen_callback_arg {
 	void *xen_arg;
 };
 
-int
+static int
 xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 		bus_addr_t boundary, bus_addr_t lowaddr, bus_addr_t highaddr,
 		bus_dma_filter_t *filtfunc, void *filtfuncarg,	bus_size_t maxsize,
@@ -100,7 +100,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	return 0;
 }
 
-int
+static int
 xen_bus_dma_tag_destroy(bus_dma_tag_t dmat, grant_ref_t *refs,
 		unsigned int refcount)
 {
@@ -185,7 +185,7 @@ xen_bus_dmamap_load_mbuf_callback(void *callback_arg, bus_dma_segment_t *segs,
 }
 
 
-int
+static int
 xen_bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void	*buf,
 		bus_size_t buflen, bus_dmamap_callback_t *callback,
 		void *callback_arg, int flags, grant_ref_t *refs)
@@ -206,7 +206,7 @@ xen_bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void	*buf,
 	return (0);
 }
 
-int
+static int
 xen_bus_dmamap_load_mbuf(bus_dma_tag_t	dmat, bus_dmamap_t map,
 		struct mbuf *mbuf, bus_dmamap_callback2_t *callback,
 		void *callback_arg, int flags, grant_ref_t *refs)
@@ -227,7 +227,7 @@ xen_bus_dmamap_load_mbuf(bus_dma_tag_t	dmat, bus_dmamap_t map,
 	return (0);
 }
 
-void
+static void
 xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map, grant_ref_t *refs,
 		unsigned int refcount)
 {

@@ -95,6 +95,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	}
 
   newtag->nrefs = nsegments;
+  newtag->domid = domid;
 
 	/* Allocate the grant references for each segment. */
 	newtag->refs = malloc(nsegments*sizeof(grant_ref_t), M_DEVBUF, M_NOWAIT);

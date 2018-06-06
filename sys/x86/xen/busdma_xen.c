@@ -40,6 +40,7 @@ struct bus_dma_tag_xen {
   bus_dma_tag_t parent;
   grant_ref_t *refs;
   int nrefs;
+  domid_t domid;
 };
 
 struct xen_callback_arg {

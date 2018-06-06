@@ -37,8 +37,6 @@
 #ifndef __ASM_GNTTAB_H__
 #define __ASM_GNTTAB_H__
 
-#include <machine/bus.h>
-
 #include <xen/xen-os.h>
 #include <xen/hypervisor.h>
 #include <xen/features.h>
@@ -118,32 +116,5 @@ void gnttab_grant_foreign_transfer_ref(grant_ref_t, domid_t domid,
 
 int gnttab_suspend(void);
 int gnttab_resume(device_t);
-
-/*
- * Xen-specific handlers for bus_dma(9).
- * The bus_dma(9) interface can be used to extract the physical address of a
- * grant mapping and update the grant table entries. This allows for a more
- * transparent integration with the rest of the system.
- */
-
-int xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
-		bus_addr_t boundary, bus_addr_t lowaddr, bus_addr_t highaddr,
-		bus_dma_filter_t *filtfunc, void *filtfuncarg,	bus_size_t maxsize,
-		int nsegments,	bus_size_t maxsegsz, int flags,
-		bus_dma_lock_t	*lockfunc, void	*lockfuncarg, bus_dma_tag_t *dmat, grant_ref_t **refs);
-
-int xen_bus_dma_tag_destroy(bus_dma_tag_t dmat, grant_ref_t *refs,
-		unsigned int refcount);
-
-int xen_bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void	*buf,
-		bus_size_t buflen, bus_dmamap_callback_t *callback,
-		void *callback_arg, int flags, grant_ref_t *refs);
-
-int xen_bus_dmamap_load_mbuf(bus_dma_tag_t	dmat, bus_dmamap_t map,
-		struct	mbuf *mbuf, bus_dmamap_callback2_t *callback,
-		void *callback_arg, int flags, grant_ref_t *refs);
-
-void xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map,
-		grant_ref_t *refs, unsigned int refcount);
 
 #endif /* __ASM_GNTTAB_H__ */

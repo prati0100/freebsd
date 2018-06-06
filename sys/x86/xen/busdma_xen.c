@@ -52,8 +52,10 @@ struct xen_callback_arg {
 	/* The client driver's callback arg. */
 	void *client_callback_arg;
 
-	/* Xen's callback arg. */
+	/* Xen's callback args */
 	grant_ref_t *xen_arg;
+  int nrefs;
+  domid_t domid;
 };
 
 static int

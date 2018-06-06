@@ -138,10 +138,11 @@ static void
 xen_bus_dmamap_load_callback(void *callback_arg, bus_dma_segment_t *segs,
 		int nseg, int error)
 {
-	grant_ref_t *refs;
+  grant_ref_t *refs;
+  domid_t domid;
 	struct xen_callback_arg *arg;
 	bus_dmamap_callback_t *callback;
-	int i;
+	int i, nrefs;
 
 	if (error) {
 		(*callback)(arg->client_callback_arg, segs, nseg, error);
@@ -150,14 +151,27 @@ xen_bus_dmamap_load_callback(void *callback_arg, bus_dma_segment_t *segs,
 
 	arg = callback_arg;
 
-	refs = arg->xen_arg;
+	refs = arg->refs;
+  nrefs = arg->nrefs
+  domid = arg->domid;
 	callback = arg->client_callback;
 
-	for (i = 0; i < nseg; i++) {
-		shared[refs[i]].frame = segs[i].ds_addr;
-		/* XXX Should I call wmb() for each iteration of the loop or is it ok if I
-		 * call it just once after the loop. */
-		wmb();
+  if (nrefs != nseg) {
+    /* XXX Something wrong! I don't know how to handle this. */
+    (*callback)(arg->client_callback_arg, segs, nseg, mapsize, error);
+    return;
+  }
+
+  /* Grant a grant table entry for each segment. */
+  for (i = 0; i < nseg; i++) {
+    if (gnttab_grant_foreign_access(domid, segs[i].ds_addr, 0, (refs)+i)) {
+      gnttab_end_foreign_access_references((unsigned int)i, refs);
+      /* XXX How to return the error code from here? Returning through the
+       * xen callback arg poses a problem when the allocation is defered, and
+       * thus this callback is defered. The load would have returned by the time
+       * this part is executed in that case. */
+      return;
+    }
 	}
 
 	/* Time to call the client's callback. */
@@ -196,19 +210,24 @@ xen_bus_dmamap_load_mbuf_callback(void *callback_arg, bus_dma_segment_t *segs,
 
 
 static int
-xen_bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void	*buf,
+xen_bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void *buf,
 		bus_size_t buflen, bus_dmamap_callback_t *callback,
-		void *callback_arg, int flags, grant_ref_t *refs)
+		void *callback_arg, int flags)
 {
 	struct xen_callback_arg arg;
+  struct bus_dma_tag_xen *xentag;
 	int error;
+
+  xentag = (struct bus_dma_tag_xen *)dmat;
 
 	arg.client_callback = callback;
 	arg.client_callback_arg = callback_arg;
-	arg.xen_arg = refs;
+	arg.refs = xentag->refs;
+  arg.nrefs = xentag->nrefs;
+  arg.domid = xentag->domid;
 
-	error = bus_dmamap_load(dmat, map, buf, buflen, xen_bus_dmamap_load_callback,
-			&arg, flags);
+	error = bus_dmamap_load(xentag->parent, map, buf, buflen,
+		  xen_bus_dmamap_load_callback, &arg, flags);
 	if (error) {
 		return (error);
 	}

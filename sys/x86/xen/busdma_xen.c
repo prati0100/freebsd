@@ -54,7 +54,7 @@ struct xen_callback_arg {
 	void *client_callback_arg;
 
 	/* Xen's callback arg. */
-	void *xen_arg;
+	grant_ref_t *xen_arg;
 };
 
 static int

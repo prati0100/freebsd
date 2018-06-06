@@ -36,6 +36,13 @@ __FBSDID("$FreeBSD$");
 
 #include <xen/gnttab.h>
 
+struct bus_dma_tag_xen {
+  struct bus_dma_tag_common common;
+  bus_dma_tag_t parent;
+  grant_ref_t *refs;
+  int nrefs;
+};
+
 struct xen_callback_arg {
 	/*
 	 * The callback function specified by the client driver. Using a void pointer

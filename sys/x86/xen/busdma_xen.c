@@ -109,27 +109,26 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 }
 
 static int
-xen_bus_dma_tag_destroy(bus_dma_tag_t dmat, grant_ref_t *refs,
-		unsigned int refcount)
+xen_bus_dma_tag_destroy(bus_dma_tag_t dmat)
 {
-	int error;
+  struct bus_dma_tag_xen *xentag;
+  int error;
 
-	if (refs == NULL) {
-		return (EINVAL);
-	}
+  xentag = (struct bus_dma_tag_xen *)dmat;
 
-	error = bus_dma_tag_destroy(dmat);
+  /* Clean up the parent tag first. */
+  error = bus_dma_tag_destroy(xentag->parent);
 	if (error) {
 		return (error);
 	}
 
-	/* Reclaim the grant references. */
-	gnttab_end_foreign_access_references(refcount, refs);
-
 	/* Free the refs array. */
-	free(refs, M_DEVBUF);
+	free(xentag->refs, M_DEVBUF);
 
-	return 0;
+  /* Free the Xen tag. */
+  free(xentag, M_DEVBUF);
+
+	return (0);
 }
 
 static void

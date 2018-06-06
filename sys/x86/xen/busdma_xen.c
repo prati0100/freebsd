@@ -257,15 +257,17 @@ xen_bus_dmamap_load_mbuf(bus_dma_tag_t	dmat, bus_dmamap_t map,
 }
 
 static void
-xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map, grant_ref_t *refs,
-		unsigned int refcount)
+xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 {
-	unsigned int i;
+  bus_dma_tag_xen *xentag;
+  int i;
 
-	for (i = 0; i < refcount; i++) {
-		shared[refs[i]].frame = 0;
-		wmb();
+  xentag = (bus_dma_tag_xen *)dmat;
+
+  /* Reclaim the grant references. */
+  for (i = 0; i < xentag->nrefs; i++) {
+		gnttab_end_foreign_access_ref(refs[i]);
 	}
 
-	bus_dmamap_unload(dmat, map);
+	bus_dmamap_unload(xentag->parent, map);
 }

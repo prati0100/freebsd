@@ -60,51 +60,52 @@ struct xen_callback_arg {
 static int
 xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 		bus_addr_t boundary, bus_addr_t lowaddr, bus_addr_t highaddr,
-		bus_dma_filter_t *filtfunc, void *filtfuncarg,	bus_size_t maxsize,
-		int nsegments,	bus_size_t maxsegsz, int flags,
-		bus_dma_lock_t	*lockfunc, void	*lockfuncarg, bus_dma_tag_t *dmat,
-		grant_ref_t **refs)
+		bus_dma_filter_t *filtfunc, void *filtfuncarg, bus_size_t maxsize,
+		int nsegments, bus_size_t maxsegsz, int flags,
+		bus_dma_lock_t *lockfunc, void *lockfuncarg, bus_dma_tag_t *dmat)
 {
 	domid_t domid;
+  struct bus_dma_tag_xen *newtag;
 	int i, error;
 
 	if (maxsegsz < PAGE_SIZE) {
 		return (EINVAL);
 	}
 
+  newtag = malloc(sizeof(struct bus_dma_tag_xen), M_DEVBUF, M_NOWAIT);
+  if (newtag == NULL) {
+    return (ENOMEM);
+  }
+
 	domid = flags >> 16;
 	flags &= 0xffff;
 
-	/* Allocate a new dma tag. */
+  *dmat = NULL;
+
+  /* Allocate a new dma tag. This tag is newtag's parent. */
 	error = bus_dma_tag_create(parent, alignment, boundary, lowaddr, highaddr,
 			filtfunc, filtfuncarg, maxsize, nsegments, maxsegsz, flags, lockfunc,
-			lockfuncarg, dmat);
+			lockfuncarg, &(newtag->parent));
 	if (error) {
+    free(newtag, M_DEVBUF);
+    newtag = NULL;
 		return (error);
 	}
 
+  newtag->nrefs = nsegments;
+
 	/* Allocate the grant references for each segment. */
-	*refs = malloc(nsegments*sizeof(grant_ref_t), M_DEVBUF, M_NOWAIT);
-	if ((*refs) == NULL) {
-		bus_dma_tag_destroy(*dmat);
+	newtag->refs = malloc(nsegments*sizeof(grant_ref_t), M_DEVBUF, M_NOWAIT);
+	if (newtag->refs == NULL) {
+		bus_dma_tag_destroy(newtag->parent);
+    free(newtag, M_DEVBUF);
+    newtag = NULL;
 		return (ENOMEM);
 	}
 
-	/*
-	 * Create entries in the grant table for each segment. The frame number is set
-	 * to 0 for now. It will be updated when the dma map is loaded.
-	 */
-	for (i = 0; i < nsegments; i++) {
-		error = gnttab_grant_foreign_access(domid, 0, 0, (*refs)+i);
-		if (error) {
-			gnttab_end_foreign_access_references((unsigned int)i, *refs);
-			free(*refs, M_DEVBUF);
-			*refs = NULL;
-			bus_dma_tag_destroy(*dmat);
-			return (error);
-		}
-	}
-	return 0;
+  *dmat = (bus_dma_tag_t)newtag;
+
+	return (0);
 }
 
 static int

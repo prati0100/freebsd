@@ -31,13 +31,14 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/malloc.h>
+#include <x86/include/busdma_impl.h>
 
 #include <machine/bus.h>
 
 #include <xen/gnttab.h>
 
 struct bus_dma_tag_xen {
-  bus_dma_tag_t parent;
+  struct bus_dma_tag_common common;
   grant_ref_t *refs;
   int nrefs;
   domid_t domid;
@@ -74,23 +75,19 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 		return (EINVAL);
 	}
 
-  newtag = malloc(sizeof(struct bus_dma_tag_xen), M_DEVBUF, M_NOWAIT);
-  if (newtag == NULL) {
-    return (ENOMEM);
-  }
-
 	domid = flags >> 16;
 	flags &= 0xffff;
 
   *dmat = NULL;
 
-  /* Allocate a new dma tag. This tag is newtag's parent. */
-	error = bus_dma_tag_create(parent, alignment, boundary, lowaddr, highaddr,
-			filtfunc, filtfuncarg, maxsize, nsegments, maxsegsz, flags, lockfunc,
-			lockfuncarg, &(newtag->parent));
+  /* Allocate a new dma tag. */
+	error = common_bus_dma_tag_create(parent != NULL ?
+			&((struct bus_dma_tag_xen *)parent)->common : NULL, alignment, boundary,
+			lowaddr, highaddr, filtfunc, filtfuncarg, maxsize, nsegments, maxsegsz,
+			flags, lockfunc, lockfuncarg, sizeof(struct bus_dma_tag_xen),
+			(void **)&newtag);
+
 	if (error) {
-    free(newtag, M_DEVBUF);
-    newtag = NULL;
 		return (error);
 	}
 
@@ -100,9 +97,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	/* Allocate the grant references for each segment. */
 	newtag->refs = malloc(nsegments*sizeof(grant_ref_t), M_DEVBUF, M_NOWAIT);
 	if (newtag->refs == NULL) {
-		bus_dma_tag_destroy(newtag->parent);
-    free(newtag, M_DEVBUF);
-    newtag = NULL;
+		bus_dma_tag_destroy(newtag);
 		return (ENOMEM);
 	}
 
@@ -119,8 +114,8 @@ xen_bus_dma_tag_destroy(bus_dma_tag_t dmat)
 
   xentag = (struct bus_dma_tag_xen *)dmat;
 
-  /* Clean up the parent tag first. */
-  error = bus_dma_tag_destroy(xentag->parent);
+  /* Clean up the common tag first. */
+  error = bus_dma_tag_destroy(xentag->common);
 	if (error) {
 		return (error);
 	}
@@ -226,7 +221,7 @@ xen_bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void *buf,
   arg.nrefs = xentag->nrefs;
   arg.domid = xentag->domid;
 
-	error = bus_dmamap_load(xentag->parent, map, buf, buflen,
+	error = bus_dmamap_load((bus_dma_tag_t)xentag->common, map, buf, buflen,
 		  xen_bus_dmamap_load_callback, &arg, flags);
 	if (error) {
 		return (error);
@@ -269,5 +264,5 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 		gnttab_end_foreign_access_ref(refs[i]);
 	}
 
-	bus_dmamap_unload(xentag->parent, map);
+	bus_dmamap_unload((bus_dma_tag_t)xentag->common, map);
 }

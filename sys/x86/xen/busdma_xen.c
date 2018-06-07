@@ -38,10 +38,10 @@ __FBSDID("$FreeBSD$");
 #include <xen/gnttab.h>
 
 struct bus_dma_tag_xen {
-  struct bus_dma_tag_common common;
-  grant_ref_t *refs;
-  int nrefs;
-  domid_t domid;
+	struct bus_dma_tag_common common;
+	grant_ref_t *refs;
+	int nrefs;
+	domid_t domid;
 };
 
 struct xen_callback_arg {
@@ -56,8 +56,8 @@ struct xen_callback_arg {
 
 	/* Xen's callback args */
 	grant_ref_t *refs;
-  int nrefs;
-  domid_t domid;
+	int nrefs;
+	domid_t domid;
 };
 
 static int
@@ -68,7 +68,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 		bus_dma_lock_t *lockfunc, void *lockfuncarg, bus_dma_tag_t *dmat)
 {
 	domid_t domid;
-  struct bus_dma_tag_xen *newtag;
+	struct bus_dma_tag_xen *newtag;
 	int i, error;
 
 	if (maxsegsz < PAGE_SIZE) {
@@ -78,9 +78,9 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	domid = flags >> 16;
 	flags &= 0xffff;
 
-  *dmat = NULL;
+	*dmat = NULL;
 
-  /* Allocate a new dma tag. */
+	/* Allocate a new dma tag. */
 	error = common_bus_dma_tag_create(parent != NULL ?
 			&((struct bus_dma_tag_xen *)parent)->common : NULL, alignment, boundary,
 			lowaddr, highaddr, filtfunc, filtfuncarg, maxsize, nsegments, maxsegsz,
@@ -91,8 +91,8 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 		return (error);
 	}
 
-  newtag->nrefs = nsegments;
-  newtag->domid = domid;
+	newtag->nrefs = nsegments;
+	newtag->domid = domid;
 
 	/* Allocate the grant references for each segment. */
 	newtag->refs = malloc(nsegments*sizeof(grant_ref_t), M_DEVBUF, M_NOWAIT);
@@ -101,7 +101,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 		return (ENOMEM);
 	}
 
-  *dmat = (bus_dma_tag_t)newtag;
+	*dmat = (bus_dma_tag_t)newtag;
 
 	return (0);
 }
@@ -109,13 +109,13 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 static int
 xen_bus_dma_tag_destroy(bus_dma_tag_t dmat)
 {
-  struct bus_dma_tag_xen *xentag;
-  int error;
+	struct bus_dma_tag_xen *xentag;
+	int error;
 
-  xentag = (struct bus_dma_tag_xen *)dmat;
+	xentag = (struct bus_dma_tag_xen *)dmat;
 
-  /* Clean up the common tag first. */
-  error = bus_dma_tag_destroy(xentag->common);
+	/* Clean up the common tag first. */
+	error = bus_dma_tag_destroy(xentag->common);
 	if (error) {
 		return (error);
 	}
@@ -123,8 +123,8 @@ xen_bus_dma_tag_destroy(bus_dma_tag_t dmat)
 	/* Free the refs array. */
 	free(xentag->refs, M_DEVBUF);
 
-  /* Free the Xen tag. */
-  free(xentag, M_DEVBUF);
+	/* Free the Xen tag. */
+	free(xentag, M_DEVBUF);
 
 	return (0);
 }
@@ -133,8 +133,8 @@ static void
 xen_bus_dmamap_load_callback(void *callback_arg, bus_dma_segment_t *segs,
 		int nseg, int error)
 {
-  grant_ref_t *refs;
-  domid_t domid;
+	grant_ref_t *refs;
+	domid_t domid;
 	struct xen_callback_arg *arg;
 	bus_dmamap_callback_t *callback;
 	int i, nrefs;
@@ -147,26 +147,26 @@ xen_bus_dmamap_load_callback(void *callback_arg, bus_dma_segment_t *segs,
 	arg = callback_arg;
 
 	refs = arg->refs;
-  nrefs = arg->nrefs
-  domid = arg->domid;
+	nrefs = arg->nrefs
+	domid = arg->domid;
 	callback = arg->client_callback;
 
-  if (nrefs != nseg) {
-    /* XXX Something wrong! I don't know how to handle this. */
-    (*callback)(arg->client_callback_arg, segs, nseg, mapsize, error);
-    return;
-  }
+	if (nrefs != nseg) {
+		/* XXX Something wrong! I don't know how to handle this. */
+		(*callback)(arg->client_callback_arg, segs, nseg, mapsize, error);
+		return;
+	}
 
   /* Grant a grant table entry for each segment. */
-  for (i = 0; i < nseg; i++) {
-    if (gnttab_grant_foreign_access(domid, segs[i].ds_addr, 0, (refs)+i)) {
-      gnttab_end_foreign_access_references((unsigned int)i, refs);
-      /* XXX How to return the error code from here? Returning through the
-       * xen callback arg poses a problem when the allocation is defered, and
-       * thus this callback is defered. The load would have returned by the time
-       * this part is executed in that case. */
-      return;
-    }
+	for (i = 0; i < nseg; i++) {
+		if (gnttab_grant_foreign_access(domid, segs[i].ds_addr, 0, (refs)+i)) {
+			gnttab_end_foreign_access_references((unsigned int)i, refs);
+			/* XXX How to return the error code from here? Returning through the
+			 * xen callback arg poses a problem when the allocation is defered, and
+			 * thus this callback is defered. The load would have returned by the time
+			 * this part is executed in that case. */
+			return;
+		}
 	}
 
 	/* Time to call the client's callback. */
@@ -210,19 +210,19 @@ xen_bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void *buf,
 		void *callback_arg, int flags)
 {
 	struct xen_callback_arg arg;
-  struct bus_dma_tag_xen *xentag;
+	struct bus_dma_tag_xen *xentag;
 	int error;
 
-  xentag = (struct bus_dma_tag_xen *)dmat;
+	xentag = (struct bus_dma_tag_xen *)dmat;
 
 	arg.client_callback = callback;
 	arg.client_callback_arg = callback_arg;
 	arg.refs = xentag->refs;
-  arg.nrefs = xentag->nrefs;
-  arg.domid = xentag->domid;
+	arg.nrefs = xentag->nrefs;
+	arg.domid = xentag->domid;
 
 	error = bus_dmamap_load((bus_dma_tag_t)xentag->common, map, buf, buflen,
-		  xen_bus_dmamap_load_callback, &arg, flags);
+			xen_bus_dmamap_load_callback, &arg, flags);
 	if (error) {
 		return (error);
 	}
@@ -254,13 +254,13 @@ xen_bus_dmamap_load_mbuf(bus_dma_tag_t	dmat, bus_dmamap_t map,
 static void
 xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 {
-  bus_dma_tag_xen *xentag;
-  int i;
+	bus_dma_tag_xen *xentag;
+	int i;
 
-  xentag = (bus_dma_tag_xen *)dmat;
+	xentag = (bus_dma_tag_xen *)dmat;
 
-  /* Reclaim the grant references. */
-  for (i = 0; i < xentag->nrefs; i++) {
+	/* Reclaim the grant references. */
+	for (i = 0; i < xentag->nrefs; i++) {
 		gnttab_end_foreign_access_ref(refs[i]);
 	}
 

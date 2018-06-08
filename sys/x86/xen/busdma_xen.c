@@ -39,6 +39,8 @@ __FBSDID("$FreeBSD$");
 
 struct bus_dma_tag_xen {
 	struct bus_dma_tag_common common;
+	bus_dma_tag_t parent;
+	struct bus_dma_impl parent_impl;
 	grant_ref_t *refs;
 	int nrefs;
 	domid_t domid;
@@ -69,6 +71,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 {
 	domid_t domid;
 	struct bus_dma_tag_xen *newtag;
+	bus_dma_tag_t newparent;
 	int i, error;
 
 	if (maxsegsz < PAGE_SIZE) {
@@ -80,10 +83,15 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 
 	*dmat = NULL;
 
-	/* Allocate a new dma tag. */
-	error = common_bus_dma_tag_create(parent != NULL ?
-			&((struct bus_dma_tag_xen *)parent)->common : NULL, alignment, boundary,
-			lowaddr, highaddr, filtfunc, filtfuncarg, maxsize, nsegments, maxsegsz,
+	/*
+	 * We create two tags here. The first tag is the common tag. It will be used
+	 * to hold the xen-specific bus_dma_impl. But, in the map create and load
+	 * operations, we need to use the standard dma tag to load the dma maps and
+	 * extract the physical addresses. So for those operations, we create another
+	 * tag from the parent and use it in those operations.
+	 */
+	error = common_bus_dma_tag_create(NULL, alignment, boundary, lowaddr,
+			highaddr, filtfunc, filtfuncarg, maxsize, nsegments, maxsegsz,
 			flags, lockfunc, lockfuncarg, sizeof(struct bus_dma_tag_xen),
 			(void **)&newtag);
 
@@ -91,6 +99,18 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 		return (error);
 	}
 
+	error = bus_dma_tag_create(parent, alignment, boundary, lowaddr,
+			highaddr, filtfunc, filtfuncarg, maxsize, nsegments, maxsegsz,
+			flags, lockfunc, lockfuncarg, &newparent);
+	if (error) {
+		bus_dma_tag_destroy(newtag);
+		return (error);
+	}
+
+	newtag->common.impl = &bus_dma_xen_impl;
+	/* Save a copy of parent's impl. */
+	newtag->parent_impl = *(((struct bus_dma_tag_common *)parent)->impl);
+	newtag->parent = newparent;
 	newtag->nrefs = nsegments;
 	newtag->domid = domid;
 
@@ -114,7 +134,13 @@ xen_bus_dma_tag_destroy(bus_dma_tag_t dmat)
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 
-	/* Clean up the common tag first. */
+	/* Clean up the parent tag first. */
+	error = bus_dma_tag_destroy(xentag->parent);
+	if (error) {
+		return (error);
+	}
+
+	/* Clean up the common tag next. */
 	error = bus_dma_tag_destroy(xentag->common);
 	if (error) {
 		return (error);
@@ -264,5 +290,5 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 		gnttab_end_foreign_access_ref(refs[i]);
 	}
 
-	bus_dmamap_unload((bus_dma_tag_t)xentag->common, map);
+	bus_dmamap_unload(xentag->parent, map);
 }

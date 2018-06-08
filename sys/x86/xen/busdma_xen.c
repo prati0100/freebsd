@@ -308,3 +308,20 @@ xen_bus_dmamap_sync(bus_dma_tag_t dmat, bus_dmamap_t map, bus_dmasync_op_t op)
 
 	bus_dmamap_sync(xentag->parent, map, op);
 }
+
+struct bus_dma_impl bus_dma_xen_impl = {
+	.tag_create = xen_bus_dma_tag_create,
+	.tag_destroy = xen_bus_dma_tag_destroy,
+	.tag_set_domain = xen_bus_dma_tag_set_domain,
+	.map_create = xen_bus_dmamap_create,
+	.map_destroy = xen_bus_dmamap_destroy,
+	.mem_alloc = xen_bus_dmamem_alloc,
+	.mem_free = xen_bus_dmamem_free,
+	.load_phys = xen_bus_dmamap_load_phys,
+	.load_buffer = xen_bus_dmamap_load_buffer,
+	.load_ma = xen_bus_dmamap_load_ma,
+	.map_waitok = xen_bus_dmamap_waitok,
+	.map_complete = xen_bus_dmamap_complete,
+	.map_unload = xen_bus_dmamap_unload,
+	.map_sync = xen_bus_dmamap_sync,
+}

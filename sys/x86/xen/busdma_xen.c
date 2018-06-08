@@ -196,6 +196,44 @@ xen_bus_dmamem_free(bus_dma_tag_t dmat, void *vaddr, bus_dmamap_t map)
 	return (bus_dmamem_free(xentag->parent, vaddr, map));
 }
 
+static int
+xen_bus_dmamap_load_ma(bus_dma_tag_t dmat, bus_dmamap_t map,
+		struct vm_page **ma, bus_size_t tlen, int ma_offs, int flags,
+		bus_dma_segment_t *segs, int *segp)
+{
+	struct bus_dma_tag_xen *xentag;
+
+	xentag = (struct bus_dma_tag_xen *)dmat;
+
+	return (_bus_dmamap_load_ma(xentag->parent, map, ma, tlen, ma_offs,
+			flags, segs, segp));
+}
+
+static int
+xen_bus_dmamap_load_phys(bus_dma_tag_t dmat, bus_dmamap_t map,
+		vm_paddr_t buf, bus_size_t buflen, int flags,
+		bus_dma_segment_t *segs, int *segp)
+{
+	struct bus_dma_tag_xen *xentag;
+
+	xentag = (struct bus_dma_tag_xen *)dmat;
+
+	return (_bus_dmamap_load_phys(xentag->parent, map, buf, buflen, flags
+			segs, segp));
+}
+
+static int
+xen_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map,
+		void *buf, bus_size_t buflen, struct pmap *pmap, int flags,
+		bus_dma_segment_t *segs, int *segp)
+{
+	struct bus_dma_tag_xen *xentag;
+
+	xentag = (struct bus_dma_tag_xen *)dmat;
+
+	return (_bus_dmamap_load_buffer(xentag->parent, map, buf, buflen, pmap,
+			flags, segs, segp));
+}
 static void
 xen_bus_dmamap_load_callback(void *callback_arg, bus_dma_segment_t *segs,
 		int nseg, int error)

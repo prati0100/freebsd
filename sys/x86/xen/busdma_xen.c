@@ -234,6 +234,41 @@ xen_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map,
 	return (_bus_dmamap_load_buffer(xentag->parent, map, buf, buflen, pmap,
 			flags, segs, segp));
 }
+
+static void
+xen_bus_dmamap_waitok(bus_dma_tag_t dmat, bus_dmamap_t map,
+		struct memdesc *mem, bus_dmamap_callback_t *callback, void *callback_arg)
+{
+	struct bus_dma_tag_xen *xentag;
+
+	xentag = (struct bus_dma_tag_xen *)dmat;
+
+	_bus_dmamap_waitok(xentag->parent, map, mem, callback, callback_arg);
+}
+
+static bus_dma_segment_t *
+xen_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
+		bus_dma_segment_t *segs, int nsegs, int error)
+{
+	struct bus_dma_tag_xen *xentag;
+	grant_ref_t *refs;
+
+	xentag = (struct bus_dma_tag_xen *)dmat;
+	refs = xentag->refs;
+
+	segs = _bus_dmamap_complete(xentag->parent, map, segs, nsegs, error);
+
+	/* Grant a grant table entry for each segment. */
+	for (i = 0; i < nseg; i++) {
+		/* XXX What if gnttab_end_foreign_access() returns an error? How do
+		 * we return the error code? */
+		gnttab_grant_foreign_access(domid, segs[i].ds_addr, 0, (refs)+i);
+		segs[i].ds_addr = refs[i];
+	}
+
+	return (segs);
+}
+
 static void
 xen_bus_dmamap_load_callback(void *callback_arg, bus_dma_segment_t *segs,
 		int nseg, int error)

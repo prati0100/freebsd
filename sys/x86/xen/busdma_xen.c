@@ -175,6 +175,27 @@ xen_bus_dmamap_destroy(bus_dma_tag_t dmat, bus_dmamap_t map)
 	return (bus_dmamap_destroy(xentag->parent, map));
 }
 
+static int
+xen_bus_dmamem_alloc(bus_dma_tag_t dmat, void** vaddr, int flags,
+		bus_dmamap_t *mapp)
+{
+	struct bus_dma_tag_xen *xentag;
+
+	xentag = (struct bus_dma_tag_xen *)dmat;
+
+	return (bus_dmamem_alloc(xentag->parent, vaddr, flags, mapp));
+}
+
+static void
+xen_bus_dmamem_free(bus_dma_tag_t dmat, void *vaddr, bus_dmamap_t map)
+{
+	struct bus_dma_tag_xen *xentag;
+
+	xentag = (struct bus_dma_tag_xen *)dmat;
+
+	return (bus_dmamem_free(xentag->parent, vaddr, map));
+}
+
 static void
 xen_bus_dmamap_load_callback(void *callback_arg, bus_dma_segment_t *segs,
 		int nseg, int error)

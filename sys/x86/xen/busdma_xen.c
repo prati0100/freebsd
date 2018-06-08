@@ -156,6 +156,18 @@ xen_bus_dma_tag_destroy(bus_dma_tag_t dmat)
 }
 
 static int
+xen_bus_dma_tag_set_domain(bus_dma_tag_t dmat)
+{
+	struct bus_dma_tag_xen *xentag;
+	struct bus_dma_tag_common *parent;
+
+	xentag = (struct bus_dma_tag_xen *)dmat;
+	parent = (bus_dma_tag_common *) xentag->parent;
+
+	return (parent->impl->tag_set_domain(xentag->parent));
+}
+
+static int
 xen_bus_dmamap_create(bus_dma_tag_t dmat, int flags, bus_dmamap_t *mapp)
 {
 	struct bus_dma_tag_xen *xentag;
@@ -285,4 +297,14 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 	}
 
 	bus_dmamap_unload(xentag->parent, map);
+}
+
+static void
+xen_bus_dmamap_sync(bus_dma_tag_t dmat, bus_dmamap_t map, bus_dmasync_op_t op)
+{
+	struct bus_dma_tag_xen *xentag;
+
+	xentag = (struct bus_dma_tag_xen *)dmat;
+
+	bus_dmamap_sync(xentag->parent, map, op);
 }

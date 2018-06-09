@@ -31,9 +31,11 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/malloc.h>
-#include <x86/include/busdma_impl.h>
+#include <sys/bus.h>
 
 #include <machine/bus.h>
+
+#include <x86/include/busdma_impl.h>
 
 #include <xen/gnttab.h>
 
@@ -62,6 +64,8 @@ struct xen_callback_arg {
 	domid_t domid;
 };
 
+struct bus_dma_impl bus_dma_xen_impl;
+
 static int
 xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 		bus_addr_t boundary, bus_addr_t lowaddr, bus_addr_t highaddr,
@@ -72,7 +76,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	domid_t domid;
 	struct bus_dma_tag_xen *newtag;
 	bus_dma_tag_t newparent;
-	int i, error;
+	int error;
 
 	if (maxsegsz < PAGE_SIZE) {
 		return (EINVAL);
@@ -103,7 +107,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 			highaddr, filtfunc, filtfuncarg, maxsize, nsegments, maxsegsz,
 			flags, lockfunc, lockfuncarg, &newparent);
 	if (error) {
-		bus_dma_tag_destroy(newtag);
+		bus_dma_tag_destroy((bus_dma_tag_t)newtag);
 		return (error);
 	}
 
@@ -117,7 +121,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	/* Allocate the grant references for each segment. */
 	newtag->refs = malloc(nsegments*sizeof(grant_ref_t), M_DEVBUF, M_NOWAIT);
 	if (newtag->refs == NULL) {
-		bus_dma_tag_destroy(newtag);
+		bus_dma_tag_destroy((bus_dma_tag_t)newtag);
 		return (ENOMEM);
 	}
 
@@ -162,7 +166,7 @@ xen_bus_dma_tag_set_domain(bus_dma_tag_t dmat)
 	struct bus_dma_tag_common *parent;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
-	parent = (bus_dma_tag_common *) xentag->parent;
+	parent = (struct bus_dma_tag_common *) xentag->parent;
 
 	return (parent->impl->tag_set_domain(xentag->parent));
 }
@@ -230,7 +234,7 @@ xen_bus_dmamap_load_phys(bus_dma_tag_t dmat, bus_dmamap_t map,
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 
-	return (_bus_dmamap_load_phys(xentag->parent, map, buf, buflen, flags
+	return (_bus_dmamap_load_phys(xentag->parent, map, buf, buflen, flags,
 			segs, segp));
 }
 
@@ -264,14 +268,17 @@ xen_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
 {
 	struct bus_dma_tag_xen *xentag;
 	grant_ref_t *refs;
+	domid_t domid;
+	int i;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	refs = xentag->refs;
+	domid = xentag->domid;
 
 	segs = _bus_dmamap_complete(xentag->parent, map, segs, nsegs, error);
 
 	/* Grant a grant table entry for each segment. */
-	for (i = 0; i < nseg; i++) {
+	for (i = 0; i < nsegs; i++) {
 		/* XXX What if gnttab_end_foreign_access() returns an error? How do
 		 * we return the error code? */
 		gnttab_grant_foreign_access(domid, segs[i].ds_addr, 0, (refs)+i);
@@ -284,11 +291,11 @@ xen_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
 static void
 xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 {
-	bus_dma_tag_xen *xentag;
+	struct bus_dma_tag_xen *xentag;
 	grant_ref_t *refs;
 	int i;
 
-	xentag = (bus_dma_tag_xen *)dmat;
+	xentag = (struct bus_dma_tag_xen *)dmat;
 	refs = xentag->refs;
 
 	/* Reclaim the grant references. */
@@ -324,4 +331,4 @@ struct bus_dma_impl bus_dma_xen_impl = {
 	.map_complete = xen_bus_dmamap_complete,
 	.map_unload = xen_bus_dmamap_unload,
 	.map_sync = xen_bus_dmamap_sync,
-}
+};

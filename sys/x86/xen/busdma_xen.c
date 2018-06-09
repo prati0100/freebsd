@@ -144,12 +144,6 @@ xen_bus_dma_tag_destroy(bus_dma_tag_t dmat)
 		return (error);
 	}
 
-	/* Clean up the common tag next. */
-	error = bus_dma_tag_destroy(xentag->common);
-	if (error) {
-		return (error);
-	}
-
 	/* Free the refs array. */
 	free(xentag->refs, M_DEVBUF);
 

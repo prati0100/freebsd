@@ -48,22 +48,6 @@ struct bus_dma_tag_xen {
 	domid_t domid;
 };
 
-struct xen_callback_arg {
-	/*
-	 * The callback function specified by the client driver. Using a void pointer
-	 * and not bus_dmamap_callback_t so we can use this struct with both
-	 * bus_dmamap_load() and bus_dmamap_load_mbuf().
-	 */
-	void *client_callback;
-	/* The client driver's callback arg. */
-	void *client_callback_arg;
-
-	/* Xen's callback args */
-	grant_ref_t *refs;
-	int nrefs;
-	domid_t domid;
-};
-
 struct bus_dma_impl bus_dma_xen_impl;
 
 static int

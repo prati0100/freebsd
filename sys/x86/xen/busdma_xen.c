@@ -87,6 +87,11 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 		return (error);
 	}
 
+	/* XXX I create this second tag because I don't want to directly save the
+	 * parent and use it later. There is no guarantee that parent will not
+	 * be destroyed before the child tag, as far as I know. Is this the right
+	 * thing to do?
+	 */
 	error = bus_dma_tag_create(parent, alignment, boundary, lowaddr,
 			highaddr, filtfunc, filtfuncarg, maxsize, nsegments, maxsegsz,
 			flags, lockfunc, lockfuncarg, &newparent);
@@ -105,6 +110,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	/* Allocate the grant references for each segment. */
 	newtag->refs = malloc(nsegments*sizeof(grant_ref_t), M_DEVBUF, M_NOWAIT);
 	if (newtag->refs == NULL) {
+		bus_dma_tag_destroy(newtag->parent);
 		bus_dma_tag_destroy((bus_dma_tag_t)newtag);
 		return (ENOMEM);
 	}

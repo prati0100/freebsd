@@ -44,7 +44,7 @@ struct bus_dma_tag_xen {
 	bus_dma_tag_t parent;
 	struct bus_dma_impl parent_impl;
 	grant_ref_t *refs;
-	int nrefs;
+	unsigned int nrefs;
 	domid_t domid;
 };
 
@@ -104,7 +104,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	/* Save a copy of parent's impl. */
 	newtag->parent_impl = *(((struct bus_dma_tag_common *)parent)->impl);
 	newtag->parent = newparent;
-	newtag->nrefs = nsegments;
+	newtag->nrefs = (unsigned int)nsegments;
 	newtag->domid = domid;
 
 	/* Allocate the grant references for each segment. */
@@ -253,7 +253,7 @@ xen_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
 	struct bus_dma_tag_xen *xentag;
 	grant_ref_t *refs;
 	domid_t domid;
-	int i;
+	unsigned int i;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	refs = xentag->refs;
@@ -262,7 +262,7 @@ xen_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
 	segs = _bus_dmamap_complete(xentag->parent, map, segs, nsegs, error);
 
 	/* Grant a grant table entry for each segment. */
-	for (i = 0; i < nsegs; i++) {
+	for (i = 0; i < xentag->nrefs; i++) {
 		/* XXX What if gnttab_end_foreign_access() returns an error? How do
 		 * we return the error code? */
 		gnttab_grant_foreign_access(domid, segs[i].ds_addr, 0, (refs)+i);
@@ -277,7 +277,7 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 {
 	struct bus_dma_tag_xen *xentag;
 	grant_ref_t *refs;
-	int i;
+	unsigned int i;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	refs = xentag->refs;

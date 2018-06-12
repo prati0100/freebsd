@@ -43,6 +43,7 @@ struct bus_dma_tag_xen {
 	struct bus_dma_tag_common common;
 	bus_dma_tag_t parent;
 	struct bus_dma_impl parent_impl;
+	grant_ref_t gref_head;  /* The head of the grant references liat. */
 	grant_ref_t *refs;
 	unsigned int nrefs;
 	domid_t domid;
@@ -61,6 +62,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	struct bus_dma_tag_xen *newtag;
 	bus_dma_tag_t newparent;
 	int error;
+	unsigned int i;
 
 	if (maxsegsz < PAGE_SIZE) {
 		return (EINVAL);
@@ -107,12 +109,26 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	newtag->nrefs = (unsigned int)nsegments;
 	newtag->domid = domid;
 
-	/* Allocate the grant references for each segment. */
+	/* Allocate the grant references array. */
 	newtag->refs = malloc(nsegments*sizeof(grant_ref_t), M_DEVBUF, M_NOWAIT);
 	if (newtag->refs == NULL) {
 		bus_dma_tag_destroy(newtag->parent);
 		bus_dma_tag_destroy((bus_dma_tag_t)newtag);
 		return (ENOMEM);
+	}
+
+	/* Now allocate grant references in the grant table. */
+	error = gnttab_alloc_grant_references(newtag->nrefs, &newtag->gref_head);
+	if (error) {
+		bus_dma_tag_destroy(newtag->parent);
+		bus_dma_tag_destroy((bus_dma_tag_t)newtag);
+		free(newtag->refs, M_DEVBUF);
+		return (error);
+	}
+
+	/* Claim the grant references allocated and store them in the refs array. */
+	for (i = 0; i < newtag->nrefs; i++) {
+		newtag->refs[i] = gnttab_claim_grant_reference(&newtag->gref_head);
 	}
 
 	*dmat = (bus_dma_tag_t)newtag;
@@ -125,6 +141,7 @@ xen_bus_dma_tag_destroy(bus_dma_tag_t dmat)
 {
 	struct bus_dma_tag_xen *xentag;
 	int error;
+	unsigned int i;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 
@@ -134,8 +151,16 @@ xen_bus_dma_tag_destroy(bus_dma_tag_t dmat)
 		return (error);
 	}
 
+	/* Release the grant references. */
+	for (i = 0; i < xentag->nrefs; i++) {
+		gnttab_release_grant_reference(&xentag->gref_head, xentag->refs[i]);
+	}
+
 	/* Free the refs array. */
 	free(xentag->refs, M_DEVBUF);
+
+	/* Free the grant references. */
+	gnttab_free_grant_references(xentag->gref_head);
 
 	/* Free the Xen tag. */
 	free(xentag, M_DEVBUF);
@@ -261,11 +286,9 @@ xen_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
 
 	segs = _bus_dmamap_complete(xentag->parent, map, segs, nsegs, error);
 
-	/* Grant a grant table entry for each segment. */
+	/* Map the grant table entry for each segment. */
 	for (i = 0; i < xentag->nrefs; i++) {
-		/* XXX What if gnttab_end_foreign_access() returns an error? How do
-		 * we return the error code? */
-		gnttab_grant_foreign_access(domid, segs[i].ds_addr, 0, (refs)+i);
+		gnttab_grant_foreign_access_ref(refs[i], domid, segs[i].ds_addr, 0);
 		segs[i].ds_addr = refs[i];
 	}
 

@@ -39,6 +39,8 @@ __FBSDID("$FreeBSD$");
 
 #include <xen/gnttab.h>
 
+MALLOC_DEFINE(M_BUSDMA_XEN, "busdma_xen_buf", "Xen-specific bus_dma(9) buffer");
+
 struct bus_dma_tag_xen {
 	struct bus_dma_tag_common common;
 	bus_dma_tag_t parent;
@@ -110,7 +112,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	newtag->domid = domid;
 
 	/* Allocate the grant references array. */
-	newtag->refs = malloc(nsegments*sizeof(grant_ref_t), M_DEVBUF, M_NOWAIT);
+	newtag->refs = malloc(nsegments*sizeof(grant_ref_t), M_BUSDMA_XEN, M_NOWAIT);
 	if (newtag->refs == NULL) {
 		bus_dma_tag_destroy(newtag->parent);
 		bus_dma_tag_destroy((bus_dma_tag_t)newtag);
@@ -122,7 +124,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	if (error) {
 		bus_dma_tag_destroy(newtag->parent);
 		bus_dma_tag_destroy((bus_dma_tag_t)newtag);
-		free(newtag->refs, M_DEVBUF);
+		free(newtag->refs, M_BUSDMA_XEN);
 		return (error);
 	}
 
@@ -157,7 +159,7 @@ xen_bus_dma_tag_destroy(bus_dma_tag_t dmat)
 	}
 
 	/* Free the refs array. */
-	free(xentag->refs, M_DEVBUF);
+	free(xentag->refs, M_BUSDMA_XEN);
 
 	/* Free the grant references. */
 	gnttab_free_grant_references(xentag->gref_head);

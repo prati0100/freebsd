@@ -288,6 +288,11 @@ xen_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
 
 	segs = _bus_dmamap_complete(xentag->parent, map, segs, nsegs, error);
 
+	/* If there was an error, do not map the grant references. */
+	if (error) {
+		return (segs);
+	}
+
 	/* Map the grant table entry for each segment. */
 	for (i = 0; i < xentag->nrefs; i++) {
 		gnttab_grant_foreign_access_ref(refs[i], domid, segs[i].ds_addr, 0);

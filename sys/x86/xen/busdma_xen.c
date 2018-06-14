@@ -33,6 +33,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/kernel.h>
 #include <sys/malloc.h>
 #include <sys/bus.h>
+#include <sys/systm.h>
 
 #include <machine/bus.h>
 
@@ -41,15 +42,21 @@ __FBSDID("$FreeBSD$");
 #include <xen/gnttab.h>
 
 MALLOC_DEFINE(M_BUSDMA_XEN, "busdma_xen_buf", "Xen-specific bus_dma(9) buffer");
+MALLOC_DEFINE(M_XEN_DMAMAP, "xen_dmamap", "Xen-specific DMA map");
 
 struct bus_dma_tag_xen {
 	struct bus_dma_tag_common common;
 	bus_dma_tag_t parent;
 	struct bus_dma_impl parent_impl;
+	int nsegments;
+	domid_t domid;
+};
+
+struct bus_dmamap_xen {
+	bus_dmamap_t map;
 	grant_ref_t gref_head;  /* The head of the grant references liat. */
 	grant_ref_t *refs;
 	unsigned int nrefs;
-	domid_t domid;
 };
 
 struct bus_dma_impl bus_dma_xen_impl;
@@ -65,7 +72,6 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	struct bus_dma_tag_xen *newtag;
 	bus_dma_tag_t newparent;
 	int error;
-	unsigned int i;
 
 	if (maxsegsz < PAGE_SIZE) {
 		return (EINVAL);
@@ -104,30 +110,8 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	/* Save a copy of parent's impl. */
 	newtag->parent_impl = *(((struct bus_dma_tag_common *)parent)->impl);
 	newtag->parent = newparent;
-	newtag->nrefs = (unsigned int)nsegments;
+	newtag->nsegments = nsegments;
 	newtag->domid = domid;
-
-	/* Allocate the grant references array. */
-	newtag->refs = malloc(nsegments*sizeof(grant_ref_t), M_BUSDMA_XEN, M_NOWAIT);
-	if (newtag->refs == NULL) {
-		bus_dma_tag_destroy(newtag->parent);
-		bus_dma_tag_destroy((bus_dma_tag_t)newtag);
-		return (ENOMEM);
-	}
-
-	/* Now allocate grant references in the grant table. */
-	error = gnttab_alloc_grant_references(newtag->nrefs, &newtag->gref_head);
-	if (error) {
-		bus_dma_tag_destroy(newtag->parent);
-		bus_dma_tag_destroy((bus_dma_tag_t)newtag);
-		free(newtag->refs, M_BUSDMA_XEN);
-		return (error);
-	}
-
-	/* Claim the grant references allocated and store them in the refs array. */
-	for (i = 0; i < newtag->nrefs; i++) {
-		newtag->refs[i] = gnttab_claim_grant_reference(&newtag->gref_head);
-	}
 
 	*dmat = (bus_dma_tag_t)newtag;
 
@@ -139,7 +123,6 @@ xen_bus_dma_tag_destroy(bus_dma_tag_t dmat)
 {
 	struct bus_dma_tag_xen *xentag;
 	int error;
-	unsigned int i;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 
@@ -148,17 +131,6 @@ xen_bus_dma_tag_destroy(bus_dma_tag_t dmat)
 	if (error) {
 		return (error);
 	}
-
-	/* Release the grant references. */
-	for (i = 0; i < xentag->nrefs; i++) {
-		gnttab_release_grant_reference(&xentag->gref_head, xentag->refs[i]);
-	}
-
-	/* Free the refs array. */
-	free(xentag->refs, M_BUSDMA_XEN);
-
-	/* Free the grant references. */
-	gnttab_free_grant_references(xentag->gref_head);
 
 	/* Free the Xen tag. */
 	free(xentag, M_DEVBUF);
@@ -182,22 +154,50 @@ static int
 xen_bus_dmamap_create(bus_dma_tag_t dmat, int flags, bus_dmamap_t *mapp)
 {
 	struct bus_dma_tag_xen *xentag;
+	struct bus_dmamap_xen *xenmap;
+	int error;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 
-	return (bus_dmamap_create(xentag->parent, flags, mapp));
+	/* Allocate the xen-specific dma map first. */
+	xenmap = malloc(sizeof(struct bus_dmamap_xen), M_XEN_DMAMAP,
+			M_NOWAIT | M_ZERO);
+	if (xenmap == NULL) {
+		return (ENOMEM);
+	}
+
+	error = bus_dmamap_create(xentag->parent, flags, &xenmap->map);
+	if (error) {
+		free(xenmap, M_XEN_DMAMAP);
+		return (error);
+	}
+
+	*mapp = (bus_dmamap_t)xenmap;
+	return (0);
 }
 
 static int
 xen_bus_dmamap_destroy(bus_dma_tag_t dmat, bus_dmamap_t map)
 {
 	struct bus_dma_tag_xen *xentag;
+	struct bus_dmamap_xen *xenmap;
+	int error;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
+	xenmap = (struct bus_dmamap_xen *)map;
 
-	return (bus_dmamap_destroy(xentag->parent, map));
+	error = bus_dmamap_destroy(xentag->parent, xenmap->map);
+	if (error) {
+		return (error);
+	}
+
+	KASSERT(xenmap->refs == NULL, ("busdma_xen: xenmap->refs not NULL"));
+
+	free(xenmap, M_XEN_DMAMAP);
+	return (0);
 }
 
+/* TODO: Figure out how to get these two to work. */
 static int
 xen_bus_dmamem_alloc(bus_dma_tag_t dmat, void** vaddr, int flags,
 		bus_dmamap_t *mapp)
@@ -225,11 +225,57 @@ xen_bus_dmamap_load_ma(bus_dma_tag_t dmat, bus_dmamap_t map,
 		bus_dma_segment_t *segs, int *segp)
 {
 	struct bus_dma_tag_xen *xentag;
+	struct bus_dmamap_xen *xenmap;
+	int error, segcount;
+	unsigned int i;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
+	xenmap = (struct bus_dmamap_xen *)map;
 
-	return (_bus_dmamap_load_ma(xentag->parent, map, ma, tlen, ma_offs,
-			flags, segs, segp));
+	/*
+	 * segp contains the starting segment on entrace, and the ending segment on
+	 * exit. We can use it to calculate how many segments the map uses.
+	 */
+	segcount = *segp;
+
+	error = _bus_dmamap_load_ma(xentag->parent, xenmap->map, ma, tlen, ma_offs,
+			flags, segs, segp);
+	if (error) {
+		return (error);
+	}
+
+	/* XXX Should I even use this hack? Or should I simply do
+	 * nrefs = xentag->nsegments? */
+	segcount = *segp - segcount;
+	xenmap->nrefs = (unsigned int)segcount;
+
+	KASSERT(segcount <= xentag->nsegments, ("busdma_xen: segcount too large: "
+			"segcount = %d, xentag->nsegments = %d", segcount, xentag->nsegments));
+
+	/* Allocate the grant references array. */
+	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
+			M_BUSDMA_XEN, M_NOWAIT);
+	if (xenmap->refs == NULL) {
+		/* Unload the map before returning. */
+		bus_dmamap_unload(xentag->parent, xenmap->map);
+		return (ENOMEM);
+	}
+
+	/* Now allocate grant references in the grant table. */
+	error = gnttab_alloc_grant_references(xenmap->nrefs, &xenmap->gref_head);
+	if (error) {
+		/* Unload the map before returning. */
+		bus_dmamap_unload(xentag->parent, xenmap->map);
+		free(xenmap->refs, M_BUSDMA_XEN);
+		return (error);
+	}
+
+	/* Claim the grant references allocated and store them in the refs array. */
+	for (i = 0; i < xenmap->nrefs; i++) {
+		xenmap->refs[i] = gnttab_claim_grant_reference(&xenmap->gref_head);
+	}
+
+	return (0);
 }
 
 static int
@@ -238,11 +284,55 @@ xen_bus_dmamap_load_phys(bus_dma_tag_t dmat, bus_dmamap_t map,
 		bus_dma_segment_t *segs, int *segp)
 {
 	struct bus_dma_tag_xen *xentag;
+	struct bus_dmamap_xen *xenmap;
+	int error, segcount;
+	unsigned int i;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
+	xenmap = (struct bus_dmamap_xen *)map;
 
-	return (_bus_dmamap_load_phys(xentag->parent, map, buf, buflen, flags,
-			segs, segp));
+	/*
+	 * segp contains the starting segment on entrace, and the ending segment on
+	 * exit. We can use it to calculate how many segments the map uses.
+	 */
+	segcount = *segp;
+
+	error = _bus_dmamap_load_phys(xentag->parent, xenmap->map, buf, buflen,
+			flags, segs, segp);
+	if (error) {
+		return (error);
+	}
+
+	segcount = *segp - segcount;
+	xenmap->nrefs = (unsigned int)segcount;
+
+	KASSERT(segcount <= xentag->nsegments, ("busdma_xen: segcount too large: "
+			"segcount = %d, xentag->nsegments = %d", segcount, xentag->nsegments));
+
+	/* Allocate the grant references array. */
+	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
+			M_BUSDMA_XEN, M_NOWAIT);
+	if (xenmap->refs == NULL) {
+		/* Unload the map before returning. */
+		bus_dmamap_unload(xentag->parent, xenmap->map);
+		return (ENOMEM);
+	}
+
+	/* Now allocate grant references in the grant table. */
+	error = gnttab_alloc_grant_references(xenmap->nrefs, &xenmap->gref_head);
+	if (error) {
+		/* Unload the map before returning. */
+		bus_dmamap_unload(xentag->parent, xenmap->map);
+		free(xenmap->refs, M_BUSDMA_XEN);
+		return (error);
+	}
+
+	/* Claim the grant references allocated and store them in the refs array. */
+	for (i = 0; i < xenmap->nrefs; i++) {
+		xenmap->refs[i] = gnttab_claim_grant_reference(&xenmap->gref_head);
+	}
+
+	return (0);
 }
 
 static int
@@ -251,11 +341,55 @@ xen_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map,
 		bus_dma_segment_t *segs, int *segp)
 {
 	struct bus_dma_tag_xen *xentag;
+	struct bus_dmamap_xen *xenmap;
+	int error, segcount;
+	unsigned int i;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
+	xenmap = (struct bus_dmamap_xen *)map;
 
-	return (_bus_dmamap_load_buffer(xentag->parent, map, buf, buflen, pmap,
-			flags, segs, segp));
+	/*
+	 * segp contains the starting segment on entrace, and the ending segment on
+	 * exit. We can use it to calculate how many segments the map uses.
+	 */
+	segcount = *segp;
+
+	error = _bus_dmamap_load_buffer(xentag->parent, xenmap->map, buf, buflen,
+			pmap, flags, segs, segp);
+	if (error) {
+		return (error);
+	}
+
+	segcount = *segp - segcount;
+	xenmap->nrefs = (unsigned int)segcount;
+
+	KASSERT(segcount <= xentag->nsegments, ("busdma_xen: segcount too large: "
+			"segcount = %d, xentag->nsegments = %d", segcount, xentag->nsegments));
+
+	/* Allocate the grant references array. */
+	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
+			M_BUSDMA_XEN, M_NOWAIT);
+	if (xenmap->refs == NULL) {
+		/* Unload the map before returning. */
+		bus_dmamap_unload(xentag->parent, xenmap->map);
+		return (ENOMEM);
+	}
+
+	/* Now allocate grant references in the grant table. */
+	error = gnttab_alloc_grant_references(xenmap->nrefs, &xenmap->gref_head);
+	if (error) {
+		/* Unload the map before returning. */
+		bus_dmamap_unload(xentag->parent, xenmap->map);
+		free(xenmap->refs, M_BUSDMA_XEN);
+		return (error);
+	}
+
+	/* Claim the grant references allocated and store them in the refs array. */
+	for (i = 0; i < xenmap->nrefs; i++) {
+		xenmap->refs[i] = gnttab_claim_grant_reference(&xenmap->gref_head);
+	}
+
+	return (0);
 }
 
 static void
@@ -263,10 +397,12 @@ xen_bus_dmamap_waitok(bus_dma_tag_t dmat, bus_dmamap_t map,
 		struct memdesc *mem, bus_dmamap_callback_t *callback, void *callback_arg)
 {
 	struct bus_dma_tag_xen *xentag;
+	struct bus_dmamap_xen *xenmap;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
+	xenmap = (struct bus_dmamap_xen *)map;
 
-	_bus_dmamap_waitok(xentag->parent, map, mem, callback, callback_arg);
+	_bus_dmamap_waitok(xentag->parent, xenmap->map, mem, callback, callback_arg);
 }
 
 static bus_dma_segment_t *
@@ -274,15 +410,17 @@ xen_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
 		bus_dma_segment_t *segs, int nsegs, int error)
 {
 	struct bus_dma_tag_xen *xentag;
+	struct bus_dmamap_xen *xenmap;
 	grant_ref_t *refs;
 	domid_t domid;
 	unsigned int i;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
-	refs = xentag->refs;
+	xenmap = (struct bus_dmamap_xen *)map;
+	refs = xenmap->refs;
 	domid = xentag->domid;
 
-	segs = _bus_dmamap_complete(xentag->parent, map, segs, nsegs, error);
+	segs = _bus_dmamap_complete(xentag->parent, xenmap->map, segs, nsegs, error);
 
 	/* If there was an error, do not map the grant references. */
 	if (error) {
@@ -290,7 +428,7 @@ xen_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
 	}
 
 	/* Map the grant table entry for each segment. */
-	for (i = 0; i < xentag->nrefs; i++) {
+	for (i = 0; i < xenmap->nrefs; i++) {
 		gnttab_grant_foreign_access_ref(refs[i], domid, segs[i].ds_addr, 0);
 		segs[i].ds_addr = refs[i];
 	}
@@ -302,28 +440,39 @@ static void
 xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 {
 	struct bus_dma_tag_xen *xentag;
+	struct bus_dmamap_xen *xenmap;
 	grant_ref_t *refs;
 	unsigned int i;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
-	refs = xentag->refs;
+	xenmap = (struct bus_dmamap_xen *)map;
+
+	refs = xenmap->refs;
 
 	/* Reclaim the grant references. */
-	for (i = 0; i < xentag->nrefs; i++) {
+	for (i = 0; i < xenmap->nrefs; i++) {
 		gnttab_end_foreign_access_ref(refs[i]);
+		gnttab_release_grant_reference(&xenmap->gref_head, refs[i]);
 	}
 
-	bus_dmamap_unload(xentag->parent, map);
+	/* We are done with the grant references. Free them. */
+	free(xenmap->refs, M_BUSDMA_XEN);
+	xenmap->refs = NULL;
+	gnttab_free_grant_references(xenmap->gref_head);
+
+	bus_dmamap_unload(xentag->parent, xenmap->map);
 }
 
 static void
 xen_bus_dmamap_sync(bus_dma_tag_t dmat, bus_dmamap_t map, bus_dmasync_op_t op)
 {
 	struct bus_dma_tag_xen *xentag;
+	struct bus_dmamap_xen *xenmap;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
+	xenmap = (struct bus_dmamap_xen *)map;
 
-	bus_dmamap_sync(xentag->parent, map, op);
+	bus_dmamap_sync(xentag->parent, xenmap->map, op);
 }
 
 struct bus_dma_impl bus_dma_xen_impl = {

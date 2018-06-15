@@ -231,20 +231,15 @@ xen_bus_dmamem_free(bus_dma_tag_t dmat, void *vaddr, bus_dmamap_t map)
 {
 	struct bus_dma_tag_xen *xentag;
 	struct bus_dmamap_xen *xenmap;
-	int error;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	xenmap = (struct bus_dmamap_xen *)map;
 
-	error = bus_dmamem_free(xentag->parent, vaddr, xenmap->map);
-	if (error) {
-		return (error);
-	}
+	bus_dmamem_free(xentag->parent, vaddr, xenmap->map);
 
 	KASSERT(xenmap->refs == NULL, ("busdma_xen: xenmap->refs not NULL"));
 
 	free(xenmap, M_XEN_DMAMAP);
-	return (0);
 }
 
 static int

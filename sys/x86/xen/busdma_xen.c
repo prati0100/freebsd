@@ -194,26 +194,54 @@ xen_bus_dmamap_destroy(bus_dma_tag_t dmat, bus_dmamap_t map)
 	return (0);
 }
 
-/* TODO: Figure out how to get these two to work. */
 static int
 xen_bus_dmamem_alloc(bus_dma_tag_t dmat, void** vaddr, int flags,
 		bus_dmamap_t *mapp)
 {
 	struct bus_dma_tag_xen *xentag;
+	struct bus_dmamap_xen *xenmap;
+	int error;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 
-	return (bus_dmamem_alloc(xentag->parent, vaddr, flags, mapp));
+	/* mapp should NULL in case of an error. */
+	*mapp = NULL;
+
+	xenmap = malloc(sizeof(struct bus_dmamap_xen), M_XEN_DMAMAP,
+			M_NOWAIT | M_ZERO);
+	if (xenmap == NULL) {
+		return (ENOMEM);
+	}
+
+	error = bus_dmamem_alloc(xentag->parent, vaddr, flags, &xenmap->map);
+	if (error) {
+		free(xenmap, M_XEN_DMAMAP);
+		return (error);
+	}
+
+	*mapp = (bus_dmamap_t)xenmap;
+	return (0);
 }
 
 static void
 xen_bus_dmamem_free(bus_dma_tag_t dmat, void *vaddr, bus_dmamap_t map)
 {
 	struct bus_dma_tag_xen *xentag;
+	struct bus_dmamap_xen *xenmap;
+	int error;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
+	xenmap = (struct bus_dmamap_xen *)map;
 
-	return (bus_dmamem_free(xentag->parent, vaddr, map));
+	error = bus_dmamem_free(xentag->parent, vaddr, xenmap->map);
+	if (error) {
+		return (error);
+	}
+
+	KASSERT(xenmap->refs == NULL, ("busdma_xen: xenmap->refs not NULL"));
+
+	free(xenmap, M_XEN_DMAMAP);
+	return (0);
 }
 
 static int

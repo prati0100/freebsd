@@ -191,7 +191,8 @@ xen_bus_dmamap_destroy(bus_dma_tag_t dmat, bus_dmamap_t map)
 		return (error);
 	}
 
-	KASSERT(xenmap->refs == NULL, ("busdma_xen: xenmap->refs not NULL"));
+	KASSERT(xenmap->refs == NULL, ("busdma_xen: xenmap->refs not NULL. "
+			"Check if unload was called"));
 
 	free(xenmap, M_XEN_DMAMAP);
 	return (0);
@@ -237,7 +238,8 @@ xen_bus_dmamem_free(bus_dma_tag_t dmat, void *vaddr, bus_dmamap_t map)
 
 	bus_dmamem_free(xentag->parent, vaddr, xenmap->map);
 
-	KASSERT(xenmap->refs == NULL, ("busdma_xen: xenmap->refs not NULL"));
+	KASSERT(xenmap->refs == NULL, ("busdma_xen: xenmap->refs not NULL. "
+			"Check if unload was called"));
 
 	free(xenmap, M_XEN_DMAMAP);
 }

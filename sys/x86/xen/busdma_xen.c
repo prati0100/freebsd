@@ -54,7 +54,7 @@ struct bus_dma_tag_xen {
 
 struct bus_dmamap_xen {
 	bus_dmamap_t map;
-	grant_ref_t gref_head;  /* The head of the grant references liat. */
+	grant_ref_t gref_head;  /* The head of the grant references list. */
 	grant_ref_t *refs;
 	unsigned int nrefs;
 };
@@ -143,7 +143,7 @@ xen_bus_dma_tag_set_domain(bus_dma_tag_t dmat)
 	struct bus_dma_tag_common *parent;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
-	parent = (struct bus_dma_tag_common *) xentag->parent;
+	parent = (struct bus_dma_tag_common *)xentag->parent;
 
 	return (parent->impl->tag_set_domain(xentag->parent));
 }

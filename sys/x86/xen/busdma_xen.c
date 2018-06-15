@@ -126,13 +126,11 @@ xen_bus_dma_tag_destroy(bus_dma_tag_t dmat)
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 
-	/* Clean up the parent tag first. */
 	error = bus_dma_tag_destroy(xentag->parent);
 	if (error) {
 		return (error);
 	}
 
-	/* Free the Xen tag. */
 	free(xentag, M_DEVBUF);
 
 	return (0);
@@ -159,7 +157,6 @@ xen_bus_dmamap_create(bus_dma_tag_t dmat, int flags, bus_dmamap_t *mapp)
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 
-	/* Allocate the xen-specific dma map first. */
 	xenmap = malloc(sizeof(struct bus_dmamap_xen), M_XEN_DMAMAP,
 			M_NOWAIT | M_ZERO);
 	if (xenmap == NULL) {
@@ -252,7 +249,6 @@ xen_bus_dmamap_load_ma(bus_dma_tag_t dmat, bus_dmamap_t map,
 	KASSERT(segcount <= xentag->nsegments, ("busdma_xen: segcount too large: "
 			"segcount = %d, xentag->nsegments = %d", segcount, xentag->nsegments));
 
-	/* Allocate the grant references array. */
 	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
 			M_BUSDMA_XEN, M_NOWAIT);
 	if (xenmap->refs == NULL) {
@@ -261,7 +257,6 @@ xen_bus_dmamap_load_ma(bus_dma_tag_t dmat, bus_dmamap_t map,
 		return (ENOMEM);
 	}
 
-	/* Now allocate grant references in the grant table. */
 	error = gnttab_alloc_grant_references(xenmap->nrefs, &xenmap->gref_head);
 	if (error) {
 		/* Unload the map before returning. */
@@ -309,7 +304,6 @@ xen_bus_dmamap_load_phys(bus_dma_tag_t dmat, bus_dmamap_t map,
 	KASSERT(segcount <= xentag->nsegments, ("busdma_xen: segcount too large: "
 			"segcount = %d, xentag->nsegments = %d", segcount, xentag->nsegments));
 
-	/* Allocate the grant references array. */
 	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
 			M_BUSDMA_XEN, M_NOWAIT);
 	if (xenmap->refs == NULL) {
@@ -318,7 +312,6 @@ xen_bus_dmamap_load_phys(bus_dma_tag_t dmat, bus_dmamap_t map,
 		return (ENOMEM);
 	}
 
-	/* Now allocate grant references in the grant table. */
 	error = gnttab_alloc_grant_references(xenmap->nrefs, &xenmap->gref_head);
 	if (error) {
 		/* Unload the map before returning. */
@@ -366,7 +359,6 @@ xen_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map,
 	KASSERT(segcount <= xentag->nsegments, ("busdma_xen: segcount too large: "
 			"segcount = %d, xentag->nsegments = %d", segcount, xentag->nsegments));
 
-	/* Allocate the grant references array. */
 	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
 			M_BUSDMA_XEN, M_NOWAIT);
 	if (xenmap->refs == NULL) {
@@ -375,7 +367,6 @@ xen_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map,
 		return (ENOMEM);
 	}
 
-	/* Now allocate grant references in the grant table. */
 	error = gnttab_alloc_grant_references(xenmap->nrefs, &xenmap->gref_head);
 	if (error) {
 		/* Unload the map before returning. */
@@ -427,7 +418,6 @@ xen_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
 		return (segs);
 	}
 
-	/* Map the grant table entry for each segment. */
 	for (i = 0; i < xenmap->nrefs; i++) {
 		gnttab_grant_foreign_access_ref(refs[i], domid, segs[i].ds_addr, 0);
 		segs[i].ds_addr = refs[i];
@@ -455,7 +445,6 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 		gnttab_release_grant_reference(&xenmap->gref_head, refs[i]);
 	}
 
-	/* We are done with the grant references. Free them. */
 	free(xenmap->refs, M_BUSDMA_XEN);
 	xenmap->refs = NULL;
 	gnttab_free_grant_references(xenmap->gref_head);

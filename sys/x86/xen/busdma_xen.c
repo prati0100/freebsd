@@ -86,8 +86,8 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	 * We create two tags here. The first tag is the common tag. It will be used
 	 * to hold the xen-specific bus_dma_impl. But, in the map create and load
 	 * operations, we need to use the standard dma tag to load the dma maps and
-	 * extract the physical addresses. So for those operations, we create another
-	 * tag from the parent and use it in those operations.
+	 * extract the physical addresses. So for those operations, we create
+	 * another tag from the parent and use it in those operations.
 	 */
 	error = common_bus_dma_tag_create(NULL, alignment, boundary, lowaddr,
 			highaddr, filtfunc, filtfuncarg, maxsize, nsegments, maxsegsz,
@@ -275,7 +275,8 @@ xen_bus_dmamap_load_ma(bus_dma_tag_t dmat, bus_dmamap_t map,
 	xenmap->nrefs = (unsigned int)segcount;
 
 	KASSERT(segcount <= xentag->nsegments, ("busdma_xen: segcount too large: "
-			"segcount = %d, xentag->nsegments = %d", segcount, xentag->nsegments));
+			"segcount = %d, xentag->nsegments = %d", segcount,
+			xentag->nsegments));
 
 	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
 			M_BUSDMA_XEN, M_NOWAIT);
@@ -330,7 +331,8 @@ xen_bus_dmamap_load_phys(bus_dma_tag_t dmat, bus_dmamap_t map,
 	xenmap->nrefs = (unsigned int)segcount;
 
 	KASSERT(segcount <= xentag->nsegments, ("busdma_xen: segcount too large: "
-			"segcount = %d, xentag->nsegments = %d", segcount, xentag->nsegments));
+			"segcount = %d, xentag->nsegments = %d", segcount,
+			xentag->nsegments));
 
 	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
 			M_BUSDMA_XEN, M_NOWAIT);
@@ -385,7 +387,8 @@ xen_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map,
 	xenmap->nrefs = (unsigned int)segcount;
 
 	KASSERT(segcount <= xentag->nsegments, ("busdma_xen: segcount too large: "
-			"segcount = %d, xentag->nsegments = %d", segcount, xentag->nsegments));
+			"segcount = %d, xentag->nsegments = %d", segcount,
+			xentag->nsegments));
 
 	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
 			M_BUSDMA_XEN, M_NOWAIT);
@@ -413,7 +416,8 @@ xen_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map,
 
 static void
 xen_bus_dmamap_waitok(bus_dma_tag_t dmat, bus_dmamap_t map,
-		struct memdesc *mem, bus_dmamap_callback_t *callback, void *callback_arg)
+		struct memdesc *mem, bus_dmamap_callback_t *callback,
+		void *callback_arg)
 {
 	struct bus_dma_tag_xen *xentag;
 	struct bus_dmamap_xen *xenmap;
@@ -421,7 +425,8 @@ xen_bus_dmamap_waitok(bus_dma_tag_t dmat, bus_dmamap_t map,
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	xenmap = (struct bus_dmamap_xen *)map;
 
-	_bus_dmamap_waitok(xentag->parent, xenmap->map, mem, callback, callback_arg);
+	_bus_dmamap_waitok(xentag->parent, xenmap->map, mem, callback,
+			callback_arg);
 }
 
 static bus_dma_segment_t *
@@ -439,7 +444,8 @@ xen_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
 	refs = xenmap->refs;
 	domid = xentag->domid;
 
-	segs = _bus_dmamap_complete(xentag->parent, xenmap->map, segs, nsegs, error);
+	segs = _bus_dmamap_complete(xentag->parent, xenmap->map, segs, nsegs,
+			error);
 
 	/* If there was an error, do not map the grant references. */
 	if (error) {

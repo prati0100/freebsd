@@ -327,7 +327,7 @@ xen_bus_dmamap_load_phys(bus_dma_tag_t dmat, bus_dmamap_t map,
 	}
 
 	segcount = *segp - segcount;
-	xenmap->nrefs = (unsigned int)segcount;
+	xenmap->nrefs = segcount;
 
 	KASSERT(segcount <= xentag->max_segments, ("busdma_xen: segcount too large: "
 			"segcount = %d, xentag->max_segments = %d", segcount,

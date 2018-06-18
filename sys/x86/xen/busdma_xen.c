@@ -285,6 +285,7 @@ xen_bus_dmamap_load_ma(bus_dma_tag_t dmat, bus_dmamap_t map,
 		return (ENOMEM);
 	}
 
+	/* TODO: We don't need to save gref_head. Remove it. */
 	error = gnttab_alloc_grant_references(xenmap->nrefs, &xenmap->gref_head);
 	if (error) {
 		/* Unload the map before returning. */
@@ -382,6 +383,8 @@ xen_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map,
 		return (error);
 	}
 
+
+	/* TODO: This code is repeated three times. Use a helper instead. */
 	segcount = *segp - segcount;
 	xenmap->nrefs = (unsigned int)segcount;
 
@@ -397,6 +400,9 @@ xen_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map,
 		return (ENOMEM);
 	}
 
+	/* TODO: Failing to alloc the grant references shouldn't be fatal. Try to
+	 * use gnttab_request_free_callback() to get notified when grant references
+	 * are available. */
 	error = gnttab_alloc_grant_references(xenmap->nrefs, &xenmap->gref_head);
 	if (error) {
 		/* Unload the map before returning. */
@@ -451,6 +457,7 @@ xen_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
 		return (segs);
 	}
 
+	/* TODO: Take segp into account in this loop. */
 	for (i = 0; i < xenmap->nrefs; i++) {
 		gnttab_grant_foreign_access_ref(refs[i], domid, segs[i].ds_addr, 0);
 		segs[i].ds_addr = refs[i];

@@ -47,7 +47,7 @@ struct bus_dma_tag_xen {
 	struct bus_dma_tag_common common;
 	bus_dma_tag_t parent;
 	struct bus_dma_impl parent_impl;
-	int nsegments;
+	unsigned int max_segments;
 	domid_t domid;
 };
 
@@ -109,7 +109,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	/* Save a copy of parent's impl. */
 	newtag->parent_impl = *(((struct bus_dma_tag_common *)parent)->impl);
 	newtag->parent = newparent;
-	newtag->nsegments = nsegments;
+	newtag->nsegments = max_segments;
 	newtag->domid = domid;
 
 	*dmat = (bus_dma_tag_t)newtag;
@@ -273,9 +273,9 @@ xen_bus_dmamap_load_ma(bus_dma_tag_t dmat, bus_dmamap_t map,
 	segcount = *segp - segcount;
 	xenmap->nrefs = (unsigned int)segcount;
 
-	KASSERT(segcount <= xentag->nsegments, ("busdma_xen: segcount too large: "
-			"segcount = %d, xentag->nsegments = %d", segcount,
-			xentag->nsegments));
+	KASSERT(segcount <= xentag->max_segments, ("busdma_xen: segcount too large: "
+			"segcount = %d, xentag->max_segments = %d", segcount,
+			xentag->max_segments));
 
 	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
 			M_BUSDMA_XEN, M_NOWAIT);
@@ -329,9 +329,9 @@ xen_bus_dmamap_load_phys(bus_dma_tag_t dmat, bus_dmamap_t map,
 	segcount = *segp - segcount;
 	xenmap->nrefs = (unsigned int)segcount;
 
-	KASSERT(segcount <= xentag->nsegments, ("busdma_xen: segcount too large: "
-			"segcount = %d, xentag->nsegments = %d", segcount,
-			xentag->nsegments));
+	KASSERT(segcount <= xentag->max_segments, ("busdma_xen: segcount too large: "
+			"segcount = %d, xentag->max_segments = %d", segcount,
+			xentag->max_segments));
 
 	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
 			M_BUSDMA_XEN, M_NOWAIT);
@@ -385,9 +385,9 @@ xen_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map,
 	segcount = *segp - segcount;
 	xenmap->nrefs = (unsigned int)segcount;
 
-	KASSERT(segcount <= xentag->nsegments, ("busdma_xen: segcount too large: "
-			"segcount = %d, xentag->nsegments = %d", segcount,
-			xentag->nsegments));
+	KASSERT(segcount <= xentag->max_segments, ("busdma_xen: segcount too large: "
+			"segcount = %d, xentag->max_segments = %d", segcount,
+			xentag->max_segments));
 
 	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
 			M_BUSDMA_XEN, M_NOWAIT);

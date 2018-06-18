@@ -243,6 +243,37 @@ xen_bus_dmamem_free(bus_dma_tag_t dmat, void *vaddr, bus_dmamap_t map)
 	free(xenmap, M_BUSDMA_XEN);
 }
 
+/* An internal function that is a helper for the three load variants. */
+static int
+xen_load_helper(struct bus_dmamap_xen *xenmap)
+{
+	int error;
+	unsigned int i;
+
+	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
+			M_BUSDMA_XEN, M_NOWAIT);
+	if (xenmap->refs == NULL) {
+		return (ENOMEM);
+	}
+
+	/* TODO: We don't need to save gref_head. Remove it. */
+	/* TODO: Failing to alloc the grant references shouldn't be fatal. Try to
+	 * use gnttab_request_free_callback() to get notified when grant references
+	 * are available. */
+	error = gnttab_alloc_grant_references(xenmap->nrefs, &xenmap->gref_head);
+	if (error) {
+		free(xenmap->refs, M_BUSDMA_XEN);
+		return (error);
+	}
+
+	/* Claim the grant references allocated and store them in the refs array. */
+	for (i = 0; i < xenmap->nrefs; i++) {
+		xenmap->refs[i] = gnttab_claim_grant_reference(&xenmap->gref_head);
+	}
+
+	return (0);
+}
+
 static int
 xen_bus_dmamap_load_ma(bus_dma_tag_t dmat, bus_dmamap_t map,
 		struct vm_page **ma, bus_size_t tlen, int ma_offs, int flags,
@@ -277,26 +308,15 @@ xen_bus_dmamap_load_ma(bus_dma_tag_t dmat, bus_dmamap_t map,
 			"segcount = %d, xentag->max_segments = %d", segcount,
 			xentag->max_segments));
 
-	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
-			M_BUSDMA_XEN, M_NOWAIT);
-	if (xenmap->refs == NULL) {
-		/* Unload the map before returning. */
-		bus_dmamap_unload(xentag->parent, xenmap->map);
-		return (ENOMEM);
-	}
-
-	/* TODO: We don't need to save gref_head. Remove it. */
-	error = gnttab_alloc_grant_references(xenmap->nrefs, &xenmap->gref_head);
+	/*
+	 * Allocate the xenmap->refs array, the grant references, and then save the
+	 * allocated references in the refs array.
+	 */
+	error = xen_load_helper(xenmap);
 	if (error) {
 		/* Unload the map before returning. */
 		bus_dmamap_unload(xentag->parent, xenmap->map);
-		free(xenmap->refs, M_BUSDMA_XEN);
 		return (error);
-	}
-
-	/* Claim the grant references allocated and store them in the refs array. */
-	for (i = 0; i < xenmap->nrefs; i++) {
-		xenmap->refs[i] = gnttab_claim_grant_reference(&xenmap->gref_head);
 	}
 
 	return (0);
@@ -334,25 +354,15 @@ xen_bus_dmamap_load_phys(bus_dma_tag_t dmat, bus_dmamap_t map,
 			"segcount = %d, xentag->max_segments = %d", segcount,
 			xentag->max_segments));
 
-	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
-			M_BUSDMA_XEN, M_NOWAIT);
-	if (xenmap->refs == NULL) {
-		/* Unload the map before returning. */
-		bus_dmamap_unload(xentag->parent, xenmap->map);
-		return (ENOMEM);
-	}
-
-	error = gnttab_alloc_grant_references(xenmap->nrefs, &xenmap->gref_head);
+	/*
+	 * Allocate the xenmap->refs array, the grant references, and then save the
+	 * allocated references in the refs array.
+	 */
+	error = xen_load_helper(xenmap);
 	if (error) {
 		/* Unload the map before returning. */
 		bus_dmamap_unload(xentag->parent, xenmap->map);
-		free(xenmap->refs, M_BUSDMA_XEN);
 		return (error);
-	}
-
-	/* Claim the grant references allocated and store them in the refs array. */
-	for (i = 0; i < xenmap->nrefs; i++) {
-		xenmap->refs[i] = gnttab_claim_grant_reference(&xenmap->gref_head);
 	}
 
 	return (0);
@@ -383,8 +393,6 @@ xen_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map,
 		return (error);
 	}
 
-
-	/* TODO: This code is repeated three times. Use a helper instead. */
 	segcount = *segp - segcount;
 	xenmap->nrefs = (unsigned int)segcount;
 
@@ -392,28 +400,15 @@ xen_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map,
 			"segcount = %d, xentag->max_segments = %d", segcount,
 			xentag->max_segments));
 
-	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
-			M_BUSDMA_XEN, M_NOWAIT);
-	if (xenmap->refs == NULL) {
-		/* Unload the map before returning. */
-		bus_dmamap_unload(xentag->parent, xenmap->map);
-		return (ENOMEM);
-	}
-
-	/* TODO: Failing to alloc the grant references shouldn't be fatal. Try to
-	 * use gnttab_request_free_callback() to get notified when grant references
-	 * are available. */
-	error = gnttab_alloc_grant_references(xenmap->nrefs, &xenmap->gref_head);
+	/*
+	 * Allocate the xenmap->refs array, the grant references, and then save the
+	 * allocated references in the refs array.
+	 */
+	error = xen_load_helper(xenmap);
 	if (error) {
 		/* Unload the map before returning. */
 		bus_dmamap_unload(xentag->parent, xenmap->map);
-		free(xenmap->refs, M_BUSDMA_XEN);
 		return (error);
-	}
-
-	/* Claim the grant references allocated and store them in the refs array. */
-	for (i = 0; i < xenmap->nrefs; i++) {
-		xenmap->refs[i] = gnttab_claim_grant_reference(&xenmap->gref_head);
 	}
 
 	return (0);

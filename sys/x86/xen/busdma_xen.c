@@ -299,8 +299,6 @@ xen_bus_dmamap_load_ma(bus_dma_tag_t dmat, bus_dmamap_t map,
 		return (error);
 	}
 
-	/* XXX Should I even use this hack? Or should I simply do
-	 * nrefs = xentag->nsegments? */
 	segcount = *segp - segcount;
 	xenmap->nrefs = (unsigned int)segcount;
 

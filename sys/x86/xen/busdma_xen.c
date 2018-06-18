@@ -53,7 +53,6 @@ struct bus_dma_tag_xen {
 
 struct bus_dmamap_xen {
 	bus_dmamap_t map;
-	grant_ref_t gref_head;  /* The head of the grant references list. */
 	grant_ref_t *refs;
 	unsigned int nrefs;
 };
@@ -249,6 +248,8 @@ xen_load_helper(struct bus_dmamap_xen *xenmap)
 {
 	int error;
 	unsigned int i;
+	/* The head of the grant ref list used for batch allocating the refs. */
+	grant_ref_t gref_head;
 
 	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
 			M_BUSDMA_XEN, M_NOWAIT);
@@ -256,11 +257,10 @@ xen_load_helper(struct bus_dmamap_xen *xenmap)
 		return (ENOMEM);
 	}
 
-	/* TODO: We don't need to save gref_head. Remove it. */
 	/* TODO: Failing to alloc the grant references shouldn't be fatal. Try to
 	 * use gnttab_request_free_callback() to get notified when grant references
 	 * are available. */
-	error = gnttab_alloc_grant_references(xenmap->nrefs, &xenmap->gref_head);
+	error = gnttab_alloc_grant_references(xenmap->nrefs, &gref_head);
 	if (error) {
 		free(xenmap->refs, M_BUSDMA_XEN);
 		return (error);
@@ -268,7 +268,7 @@ xen_load_helper(struct bus_dmamap_xen *xenmap)
 
 	/* Claim the grant references allocated and store them in the refs array. */
 	for (i = 0; i < xenmap->nrefs; i++) {
-		xenmap->refs[i] = gnttab_claim_grant_reference(&xenmap->gref_head);
+		xenmap->refs[i] = gnttab_claim_grant_reference(&gref_head);
 	}
 
 	return (0);
@@ -472,15 +472,10 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 
 	refs = xenmap->refs;
 
-	/* Reclaim the grant references. */
-	for (i = 0; i < xenmap->nrefs; i++) {
-		gnttab_end_foreign_access_ref(refs[i]);
-		gnttab_release_grant_reference(&xenmap->gref_head, refs[i]);
-	}
+	gnttab_end_foreign_access_references(xenmap->nrefs, xenmap->refs);
 
 	free(xenmap->refs, M_BUSDMA_XEN);
 	xenmap->refs = NULL;
-	gnttab_free_grant_references(xenmap->gref_head);
 
 	bus_dmamap_unload(xentag->parent, xenmap->map);
 }

@@ -42,7 +42,6 @@ __FBSDID("$FreeBSD$");
 #include <xen/gnttab.h>
 
 MALLOC_DEFINE(M_BUSDMA_XEN, "busdma_xen_buf", "Xen-specific bus_dma(9) buffer");
-MALLOC_DEFINE(M_XEN_DMAMAP, "xen_dmamap", "Xen-specific DMA map");
 
 struct bus_dma_tag_xen {
 	struct bus_dma_tag_common common;
@@ -160,7 +159,7 @@ xen_bus_dmamap_create(bus_dma_tag_t dmat, int flags, bus_dmamap_t *mapp)
 	/* mapp should NULL in case of an error. */
 	*mapp = NULL;
 
-	xenmap = malloc(sizeof(struct bus_dmamap_xen), M_XEN_DMAMAP,
+	xenmap = malloc(sizeof(struct bus_dmamap_xen), M_BUSDMA_XEN,
 			M_NOWAIT | M_ZERO);
 	if (xenmap == NULL) {
 		return (ENOMEM);
@@ -168,7 +167,7 @@ xen_bus_dmamap_create(bus_dma_tag_t dmat, int flags, bus_dmamap_t *mapp)
 
 	error = bus_dmamap_create(xentag->parent, flags, &xenmap->map);
 	if (error) {
-		free(xenmap, M_XEN_DMAMAP);
+		free(xenmap, M_BUSDMA_XEN);
 		return (error);
 	}
 
@@ -194,7 +193,7 @@ xen_bus_dmamap_destroy(bus_dma_tag_t dmat, bus_dmamap_t map)
 	KASSERT(xenmap->refs == NULL, ("busdma_xen: xenmap->refs not NULL. "
 			"Check if unload was called"));
 
-	free(xenmap, M_XEN_DMAMAP);
+	free(xenmap, M_BUSDMA_XEN);
 	return (0);
 }
 
@@ -211,7 +210,7 @@ xen_bus_dmamem_alloc(bus_dma_tag_t dmat, void** vaddr, int flags,
 	/* mapp should NULL in case of an error. */
 	*mapp = NULL;
 
-	xenmap = malloc(sizeof(struct bus_dmamap_xen), M_XEN_DMAMAP,
+	xenmap = malloc(sizeof(struct bus_dmamap_xen), M_BUSDMA_XEN,
 			M_NOWAIT | M_ZERO);
 	if (xenmap == NULL) {
 		return (ENOMEM);
@@ -219,7 +218,7 @@ xen_bus_dmamem_alloc(bus_dma_tag_t dmat, void** vaddr, int flags,
 
 	error = bus_dmamem_alloc(xentag->parent, vaddr, flags, &xenmap->map);
 	if (error) {
-		free(xenmap, M_XEN_DMAMAP);
+		free(xenmap, M_BUSDMA_XEN);
 		return (error);
 	}
 
@@ -241,7 +240,7 @@ xen_bus_dmamem_free(bus_dma_tag_t dmat, void *vaddr, bus_dmamap_t map)
 	KASSERT(xenmap->refs == NULL, ("busdma_xen: xenmap->refs not NULL. "
 			"Check if unload was called"));
 
-	free(xenmap, M_XEN_DMAMAP);
+	free(xenmap, M_BUSDMA_XEN);
 }
 
 static int

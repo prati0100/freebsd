@@ -56,6 +56,8 @@ struct bus_dmamap_xen {
 	bus_dmamap_t map;
 	grant_ref_t *refs;
 	unsigned int nrefs;
+	bus_dmamap_callback_t *callback;
+	void *callback_arg;
 };
 
 struct bus_dma_impl bus_dma_xen_impl;
@@ -415,6 +417,47 @@ xen_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map,
 	return (0);
 }
 
+/*
+ * If the load is called with the flag BUS_DMA_WAITOK, and the allocation is
+ * deferred, the grant references need to be allocated before calling the
+ * client's callback.
+ */
+static void
+xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
+		int error)
+{
+	struct bus_dma_tag_xen *xentag;
+	struct bus_dmamap_xen *xenmap;
+	bus_dmamap_callback_t *callback;
+	domid_t domid;
+	unsigned int i;
+
+	xenmap = callback_arg;
+	xentag = xenmap->tag;
+	callback = xenmap->callback;
+	domid = xentag->domid;
+
+	xenmap->nrefs = (unsigned int)nseg;
+
+	if (error) {
+		(*callback)(xenmap->callback_arg, segs, nseg, error);
+		return;
+	}
+
+	error = xen_load_helper(xenmap);
+	if (error) {
+		(*callback)(xenmap->callback_arg, segs, nseg, error);
+		return;
+	}
+
+	for (i = 0; i < xenmap->nrefs; i++) {
+		gnttab_grant_foreign_access_ref(refs[i], domid, segs[i].ds_addr, 0);
+		segs[i].ds_addr = refs[i];
+	}
+
+	(*callback)(xenmap->callback_arg, segs, nseg, 0);
+}
+
 static void
 xen_bus_dmamap_waitok(bus_dma_tag_t dmat, bus_dmamap_t map,
 		struct memdesc *mem, bus_dmamap_callback_t *callback,
@@ -426,8 +469,17 @@ xen_bus_dmamap_waitok(bus_dma_tag_t dmat, bus_dmamap_t map,
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	xenmap = (struct bus_dmamap_xen *)map;
 
-	_bus_dmamap_waitok(xentag->parent, xenmap->map, mem, callback,
-			callback_arg);
+	xenmap->callback = callback;
+	xenmap->callback_arg = callback_arg;
+
+	/*
+	 * Some extra work has to be done before calling the client callback from
+	 * a deferred context. When the load gets deferred, the grant references
+	 * are not allocated. xen_dmamap_callback allocates the grant refs before
+	 * calling the client's callback.
+	 */
+	_bus_dmamap_waitok(xentag->parent, xenmap->map, mem, xen_dmamap_callback,
+			xenmap);
 }
 
 static bus_dma_segment_t *

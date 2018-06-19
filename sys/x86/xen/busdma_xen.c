@@ -52,6 +52,7 @@ struct bus_dma_tag_xen {
 };
 
 struct bus_dmamap_xen {
+	struct bus_dma_tag_xen *tag;
 	bus_dmamap_t map;
 	grant_ref_t *refs;
 	unsigned int nrefs;
@@ -169,6 +170,8 @@ xen_bus_dmamap_create(bus_dma_tag_t dmat, int flags, bus_dmamap_t *mapp)
 		free(xenmap, M_BUSDMA_XEN);
 		return (error);
 	}
+
+	xenmap->tag = xentag;
 
 	*mapp = (bus_dmamap_t)xenmap;
 	return (0);

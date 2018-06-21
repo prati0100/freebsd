@@ -562,6 +562,7 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	else {
 		free(xenmap->temp_segs, M_BUSDMA_XEN);
 		xenmap->temp_segs = NULL;
+		xenmap->called_from_deferred = false;
 		(*callback)(xenmap->callback_arg, segs, nseg, error);
 		return;
 	}

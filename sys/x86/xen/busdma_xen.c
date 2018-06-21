@@ -117,7 +117,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	/* Save a copy of parent's impl. */
 	newtag->parent_impl = *(((struct bus_dma_tag_common *)parent)->impl);
 	newtag->parent = newparent;
-	newtag->nsegments = max_segments;
+	newtag->max_segments = nsegments;
 	newtag->domid = domid;
 
 	*dmat = (bus_dma_tag_t)newtag;
@@ -260,14 +260,16 @@ xen_gnttab_free_callback(void *arg)
 	struct bus_dma_tag_xen *xentag;
 	grant_ref_t gref_head, *refs;
 	bus_dma_segment_t *segs;
+	bus_dmamap_callback_t *callback;
+	domid_t domid;
 	int error;
 	unsigned int i;
 
 	xenmap = arg;
 	xentag = xenmap->tag;
-	refs = xenmap->refs
-	KASSERT((segs != NULL), ("busdma_xen: %s: xenmap->temp_segs = NULL"
-			"This should not happen.", __func__))
+	refs = xenmap->refs;
+	domid = xentag->domid;
+	callback = xenmap->callback;
 
 	error = gnttab_alloc_grant_references(xenmap->nrefs, &gref_head);
 	KASSERT((error == 0), ("busdma_xen: allocation of grant refs in the grant "
@@ -288,6 +290,9 @@ xen_gnttab_free_callback(void *arg)
 	 */
 	if (xenmap->called_from_deferred) {
 		segs = xenmap->temp_segs;
+		KASSERT((segs != NULL), ("busdma_xen: %s: "
+			"xenmap->temp_segs = NULL"
+			"This should not happen.", __func__));
 
 		for (i = 0; i < xenmap->nrefs; i++) {
 			gnttab_grant_foreign_access_ref(refs[i], domid, segs[i].ds_addr, 0);
@@ -301,14 +306,16 @@ xen_gnttab_free_callback(void *arg)
 
 		/* We don't need the temp_segs array anymore. */
 		free(xenmap->temp_segs, M_BUSDMA_XEN);
-		xen_map->temp_segs = NULL;
+		xenmap->temp_segs = NULL;
 
 		/* We don't need the flag anymore, so reset it. */
 		xenmap->called_from_deferred = false;
 		return;
 	}
 	else {
-		segs = _bus_dmamap_complete(xentag, xenmap, NULL, xenmap->nrefs, 0);
+		segs = _bus_dmamap_complete((bus_dma_tag_t)xentag,
+				(bus_dmamap_t)xenmap,NULL,
+				xenmap->nrefs, 0);
 
 		(xentag->common.lockfunc)(xentag->common.lockfuncarg, BUS_DMA_LOCK);
 		(*callback)(xenmap->callback_arg, segs, xenmap->nrefs, 0);
@@ -343,7 +350,8 @@ xen_load_helper(struct bus_dmamap_xen *xenmap)
 		 * are available.
 		 */
 		gnttab_request_free_callback(&xenmap->gnttab_callback,
-				xen_gnttab_free_callback, xenmap);
+				xen_gnttab_free_callback, xenmap,
+				xenmap->nrefs);
 
 		return (EINPROGRESS);
 	}
@@ -364,7 +372,6 @@ xen_bus_dmamap_load_ma(bus_dma_tag_t dmat, bus_dmamap_t map,
 	struct bus_dma_tag_xen *xentag;
 	struct bus_dmamap_xen *xenmap;
 	int error, segcount;
-	unsigned int i;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	xenmap = (struct bus_dmamap_xen *)map;
@@ -413,7 +420,6 @@ xen_bus_dmamap_load_phys(bus_dma_tag_t dmat, bus_dmamap_t map,
 	struct bus_dma_tag_xen *xentag;
 	struct bus_dmamap_xen *xenmap;
 	int error, segcount;
-	unsigned int i;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	xenmap = (struct bus_dmamap_xen *)map;
@@ -462,7 +468,6 @@ xen_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map,
 	struct bus_dma_tag_xen *xentag;
 	struct bus_dmamap_xen *xenmap;
 	int error, segcount;
-	unsigned int i;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	xenmap = (struct bus_dmamap_xen *)map;
@@ -643,7 +648,6 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 	struct bus_dma_tag_xen *xentag;
 	struct bus_dmamap_xen *xenmap;
 	grant_ref_t *refs;
-	unsigned int i;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	xenmap = (struct bus_dmamap_xen *)map;

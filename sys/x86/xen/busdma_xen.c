@@ -312,6 +312,7 @@ xen_gnttab_free_callback(void *arg)
 		xenmap->called_from_deferred = false;
 		return;
 	}
+	/* We were not called from a defered load. Call map_complete and finish up*/
 	else {
 		segs = _bus_dmamap_complete((bus_dma_tag_t)xentag,
 				(bus_dmamap_t)xenmap,NULL,

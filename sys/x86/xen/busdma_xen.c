@@ -390,7 +390,7 @@ xen_bus_dmamap_load_ma(bus_dma_tag_t dmat, bus_dmamap_t map,
 	}
 
 	segcount = *segp - segcount;
-	xenmap->nrefs = (unsigned int)segcount;
+	xenmap->nrefs = segcount;
 
 	KASSERT(segcount <= xentag->max_segments, ("busdma_xen: segcount too large: "
 			"segcount = %d, xentag->max_segments = %d", segcount,
@@ -486,7 +486,7 @@ xen_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map,
 	}
 
 	segcount = *segp - segcount;
-	xenmap->nrefs = (unsigned int)segcount;
+	xenmap->nrefs = segcount;
 
 	KASSERT(segcount <= xentag->max_segments, ("busdma_xen: segcount too large: "
 			"segcount = %d, xentag->max_segments = %d", segcount,
@@ -530,7 +530,7 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	callback = xenmap->callback;
 	domid = xentag->domid;
 
-	xenmap->nrefs = (unsigned int)nseg;
+	xenmap->nrefs = nseg;
 
 	if (error) {
 		(*callback)(xenmap->callback_arg, segs, nseg, error);

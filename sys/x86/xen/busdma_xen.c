@@ -342,6 +342,8 @@ xen_load_helper(struct bus_dmamap_xen *xenmap)
 	error = gnttab_alloc_grant_references(xenmap->nrefs, &gref_head);
 	if (error) {
 		if (!xenmap->sleepable) {
+			free(xenmap->refs, M_BUSDMA_XEN);
+			xenmap->refs = NULL;
 			return (error);
 		}
 

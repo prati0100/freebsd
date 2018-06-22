@@ -200,8 +200,8 @@ xen_bus_dmamap_destroy(bus_dma_tag_t dmat, bus_dmamap_t map)
 		return (error);
 	}
 
-	KASSERT(xenmap->refs == NULL, ("busdma_xen: xenmap->refs not NULL. "
-			"Check if unload was called"));
+	KASSERT(xenmap->refs == NULL,
+			("busdma_xen: xenmap->refs not NULL. Check if unload was called"));
 
 	free(xenmap, M_BUSDMA_XEN);
 	return (0);
@@ -247,8 +247,8 @@ xen_bus_dmamem_free(bus_dma_tag_t dmat, void *vaddr, bus_dmamap_t map)
 
 	bus_dmamem_free(xentag->parent, vaddr, xenmap->map);
 
-	KASSERT(xenmap->refs == NULL, ("busdma_xen: xenmap->refs not NULL. "
-			"Check if unload was called"));
+	KASSERT(xenmap->refs == NULL,
+			("busdma_xen: xenmap->refs not NULL. Check if unload was called"));
 
 	free(xenmap, M_BUSDMA_XEN);
 }
@@ -273,7 +273,7 @@ xen_gnttab_free_callback(void *arg)
 
 	error = gnttab_alloc_grant_references(xenmap->nrefs, &gref_head);
 	KASSERT((error == 0), ("busdma_xen: allocation of grant refs in the grant "
-			"table free callback failed. This should not happen."));
+			"table free callback failed."));
 
 	for (i = 0; i < xenmap->nrefs; i++) {
 		xenmap->refs[i] = gnttab_claim_grant_reference(&gref_head);
@@ -290,9 +290,8 @@ xen_gnttab_free_callback(void *arg)
 	 */
 	if (xenmap->called_from_deferred) {
 		segs = xenmap->temp_segs;
-		KASSERT((segs != NULL), ("busdma_xen: %s: "
-			"xenmap->temp_segs = NULL"
-			"This should not happen.", __func__));
+		KASSERT((segs != NULL),
+				("busdma_xen: %s: xenmap->temp_segs = NULL" , __func__));
 
 		for (i = 0; i < xenmap->nrefs; i++) {
 			gnttab_grant_foreign_access_ref(refs[i], domid, segs[i].ds_addr, 0);
@@ -392,8 +391,8 @@ xen_bus_dmamap_load_ma(bus_dma_tag_t dmat, bus_dmamap_t map,
 	segcount = *segp - segcount;
 	xenmap->nrefs = segcount;
 
-	KASSERT(segcount <= xentag->max_segments, ("busdma_xen: segcount too large: "
-			"segcount = %d, xentag->max_segments = %d", segcount,
+	KASSERT(segcount <= xentag->max_segments, ("busdma_xen: segcount too large:"
+			" segcount = %d, xentag->max_segments = %d", segcount,
 			xentag->max_segments));
 
 	/*
@@ -440,8 +439,8 @@ xen_bus_dmamap_load_phys(bus_dma_tag_t dmat, bus_dmamap_t map,
 	segcount = *segp - segcount;
 	xenmap->nrefs = segcount;
 
-	KASSERT(segcount <= xentag->max_segments, ("busdma_xen: segcount too large: "
-			"segcount = %d, xentag->max_segments = %d", segcount,
+	KASSERT(segcount <= xentag->max_segments, ("busdma_xen: segcount too large:"
+			" segcount = %d, xentag->max_segments = %d", segcount,
 			xentag->max_segments));
 
 	/*
@@ -488,8 +487,8 @@ xen_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map,
 	segcount = *segp - segcount;
 	xenmap->nrefs = segcount;
 
-	KASSERT(segcount <= xentag->max_segments, ("busdma_xen: segcount too large: "
-			"segcount = %d, xentag->max_segments = %d", segcount,
+	KASSERT(segcount <= xentag->max_segments, ("busdma_xen: segcount too large:"
+			" segcount = %d, xentag->max_segments = %d", segcount,
 			xentag->max_segments));
 
 	/*
@@ -548,8 +547,8 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 
 	xenmap->temp_segs = malloc(nseg*sizeof(bus_dma_segment_t), M_BUSDMA_XEN,
 			M_WAITOK | M_ZERO);
-	KASSERT((xenmap->temp_segs != NULL), ("busdma_xen: xenmap->temp_segs = NULL"
-		" .This should not happen."));
+	KASSERT((xenmap->temp_segs != NULL),
+			("busdma_xen: xenmap->temp_segs = NULL"));
 
 	for (i = 0; i < xenmap->nrefs; i++) {
 		xenmap->temp_segs[i] = segs[i];
@@ -665,8 +664,8 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 	xenmap->sleepable = false;
 	xenmap->called_from_deferred = false;
 
-	KASSERT((xenmap->temp_segs == NULL), ("busdma_xen: %s: xenmap->temp_segs"
-			" not NULL.", __func__));
+	KASSERT((xenmap->temp_segs == NULL),
+			("busdma_xen: %s: xenmap->temp_segs not NULL.", __func__));
 
 	bus_dmamap_unload(xentag->parent, xenmap->map);
 }

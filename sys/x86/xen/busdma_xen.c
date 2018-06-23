@@ -63,7 +63,6 @@ struct bus_dmamap_xen {
 
 	/* Flags. */
 	bool sleepable;
-	bool called_from_deferred;
 };
 
 struct bus_dma_impl bus_dma_xen_impl;
@@ -275,53 +274,26 @@ xen_gnttab_free_callback(void *arg)
 	KASSERT((error == 0), ("busdma_xen: allocation of grant refs in the grant "
 			"table free callback failed."));
 
+	segs = xenmap->temp_segs;
+	KASSERT((segs != NULL),
+			("busdma_xen: %s: xenmap->temp_segs = NULL" , __func__));
+
 	for (i = 0; i < xenmap->nrefs; i++) {
 		xenmap->refs[i] = gnttab_claim_grant_reference(&gref_head);
+		gnttab_grant_foreign_access_ref(refs[i], domid, segs[i].ds_addr, 0);
+		segs[i].ds_addr = refs[i];
 	}
 
-	/*
-	 * If the load of the map was deferred, and then the allocation of grant
-	 * references was also delayed, we take the following path:
-	 * xen_bus_dmamap_load_*()->xen_dmamap_callback()[Called from a deferred
-	 * context]->xen_load_helper()->xen_gnttab_free_callback()[Called from
-	 * ANOTHER deferred context again]. This means we need to map the grant refs
-	 * and then call the client callback that xen_dmamap_callback() was supposed
-	 * to do but got deferred.
-	 */
-	if (xenmap->called_from_deferred) {
-		segs = xenmap->temp_segs;
-		KASSERT((segs != NULL),
-				("busdma_xen: %s: xenmap->temp_segs = NULL" , __func__));
+	(xentag->common.lockfunc)(xentag->common.lockfuncarg, BUS_DMA_LOCK);
+	(*callback)(xenmap->callback_arg, segs, xenmap->nrefs, 0);
+	(xentag->common.lockfunc)(xentag->common.lockfuncarg,
+	    BUS_DMA_UNLOCK);
 
-		for (i = 0; i < xenmap->nrefs; i++) {
-			gnttab_grant_foreign_access_ref(refs[i], domid, segs[i].ds_addr, 0);
-			segs[i].ds_addr = refs[i];
-		}
+	/* We don't need the temp_segs array anymore. */
+	free(xenmap->temp_segs, M_BUSDMA_XEN);
+	xenmap->temp_segs = NULL;
 
-		(xentag->common.lockfunc)(xentag->common.lockfuncarg, BUS_DMA_LOCK);
-		(*callback)(xenmap->callback_arg, segs, xenmap->nrefs, 0);
-		(xentag->common.lockfunc)(xentag->common.lockfuncarg,
-		    BUS_DMA_UNLOCK);
-
-		/* We don't need the temp_segs array anymore. */
-		free(xenmap->temp_segs, M_BUSDMA_XEN);
-		xenmap->temp_segs = NULL;
-
-		/* We don't need the flag anymore, so reset it. */
-		xenmap->called_from_deferred = false;
-		return;
-	}
-	/* We were not called from a defered load. Call map_complete and finish up*/
-	else {
-		segs = _bus_dmamap_complete((bus_dma_tag_t)xentag,
-				(bus_dmamap_t)xenmap,NULL,
-				xenmap->nrefs, 0);
-
-		(xentag->common.lockfunc)(xentag->common.lockfuncarg, BUS_DMA_LOCK);
-		(*callback)(xenmap->callback_arg, segs, xenmap->nrefs, 0);
-		(xentag->common.lockfunc)(xentag->common.lockfuncarg,
-		    BUS_DMA_UNLOCK);
-	}
+	return;
 }
 
 /* An internal function that is a helper for the three load variants. */
@@ -332,6 +304,9 @@ xen_load_helper(struct bus_dmamap_xen *xenmap)
 	unsigned int i;
 	/* The head of the grant ref list used for batch allocating the refs. */
 	grant_ref_t gref_head;
+	struct bus_dma_tag_xen *xentag;
+
+	xentag = xenmap->tag;
 
 	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
 			M_BUSDMA_XEN, M_NOWAIT);
@@ -345,6 +320,25 @@ xen_load_helper(struct bus_dmamap_xen *xenmap)
 			free(xenmap->refs, M_BUSDMA_XEN);
 			xenmap->refs = NULL;
 			return (error);
+		}
+
+		if (xenmap->temp_segs == NULL) {
+			/* Complete the parent's load cycle by calling map_complete. */
+			bus_dma_segment_t *segs = _bus_dmamap_complete(xentag->parent,
+					xenmap->map, NULL, xenmap->nrefs, 0);
+
+			xenmap->temp_segs = malloc(xenmap->nrefs*sizeof(bus_dma_segment_t),
+					M_BUSDMA_XEN, M_NOWAIT);
+			if (xenmap->temp_segs == NULL) {
+				free(xenmap->refs, M_BUSDMA_XEN);
+				xenmap->refs = NULL;
+				return (ENOMEM);
+			}
+
+			/* Save a copy of the segs array, we need it later. */
+			for (i = 0; i < xenmap->nrefs; i++) {
+				xenmap->temp_segs[i] = segs[i];
+			}
 		}
 
 		/*
@@ -373,7 +367,7 @@ xen_bus_dmamap_load_ma(bus_dma_tag_t dmat, bus_dmamap_t map,
 {
 	struct bus_dma_tag_xen *xentag;
 	struct bus_dmamap_xen *xenmap;
-	int error, segcount;
+	int error, segcount, i;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	xenmap = (struct bus_dmamap_xen *)map;
@@ -539,18 +533,15 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	}
 
 	/*
-	 * This flag signals to the xen_load_helper()'s grant table free callback
-	 * (called in case there is a shortage of grant references) that we are
-	 * called from a deferred context. The helper needs to map the grant
-	 * grant references and then call the client's callback. We can't call the
-	 * client's callback from here.
+	 * Save a copy of the segs array. This may get over-written when another
+	 * load on the same tag is called.
 	 */
-	xenmap->called_from_deferred = true;
-
 	xenmap->temp_segs = malloc(nseg*sizeof(bus_dma_segment_t), M_BUSDMA_XEN,
-			M_WAITOK | M_ZERO);
-	KASSERT((xenmap->temp_segs != NULL),
-			("busdma_xen: xenmap->temp_segs = NULL"));
+			M_WAITOK);
+	if (xenmap->temp_segs == NULL) {
+		(*callback)(xenmap->callback_arg, segs, nseg, (ENOMEM));
+		return;
+	}
 
 	for (i = 0; i < xenmap->nrefs; i++) {
 		xenmap->temp_segs[i] = segs[i];
@@ -563,7 +554,6 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	else {
 		free(xenmap->temp_segs, M_BUSDMA_XEN);
 		xenmap->temp_segs = NULL;
-		xenmap->called_from_deferred = false;
 		(*callback)(xenmap->callback_arg, segs, nseg, error);
 		return;
 	}
@@ -571,9 +561,6 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	/* We don't need temp_segs any more. */
 	free(xenmap->temp_segs, M_BUSDMA_XEN);
 	xenmap->temp_segs = NULL;
-
-	/* Reset the flag now that we don't need it. */
-	xenmap->called_from_deferred = false;
 
 	refs = xenmap->refs;
 
@@ -664,7 +651,6 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 
 	/* Reset the flags. */
 	xenmap->sleepable = false;
-	xenmap->called_from_deferred = false;
 
 	KASSERT((xenmap->temp_segs == NULL),
 			("busdma_xen: %s: xenmap->temp_segs not NULL.", __func__));

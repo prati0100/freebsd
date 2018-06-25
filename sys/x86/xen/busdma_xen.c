@@ -566,7 +566,7 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	if (error == EINPROGRESS) {
 		return;
 	}
-	else {
+	else if (error != 0){
 		free(xenmap->temp_segs, M_BUSDMA_XEN);
 		xenmap->temp_segs = NULL;
 		(*callback)(xenmap->callback_arg, segs, nseg, error);

@@ -323,10 +323,6 @@ xen_load_helper(struct bus_dmamap_xen *xenmap)
 		}
 
 		if (xenmap->temp_segs == NULL) {
-			/* Complete the parent's load cycle by calling map_complete. */
-			bus_dma_segment_t *segs = _bus_dmamap_complete(xentag->parent,
-					xenmap->map, NULL, xenmap->nrefs, 0);
-
 			xenmap->temp_segs = malloc(xenmap->nrefs*sizeof(bus_dma_segment_t),
 					M_BUSDMA_XEN, M_NOWAIT);
 			if (xenmap->temp_segs == NULL) {
@@ -334,6 +330,10 @@ xen_load_helper(struct bus_dmamap_xen *xenmap)
 				xenmap->refs = NULL;
 				return (ENOMEM);
 			}
+
+			/* Complete the parent's load cycle by calling map_complete. */
+			bus_dma_segment_t *segs = _bus_dmamap_complete(xentag->parent,
+					xenmap->map, NULL, xenmap->nrefs, 0);
 
 			/* Save a copy of the segs array, we need it later. */
 			for (i = 0; i < xenmap->nrefs; i++) {

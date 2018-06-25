@@ -537,7 +537,7 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	 * load on the same tag is called.
 	 */
 	xenmap->temp_segs = malloc(nseg*sizeof(bus_dma_segment_t), M_BUSDMA_XEN,
-			M_WAITOK);
+			M_NOWAIT);
 	if (xenmap->temp_segs == NULL) {
 		(*callback)(xenmap->callback_arg, segs, nseg, (ENOMEM));
 		return;

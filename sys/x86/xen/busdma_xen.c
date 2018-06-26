@@ -383,8 +383,8 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 		segcount = *op.segp - segcount;
 		xenmap->nrefs = segcount;
 
-		KASSERT(segcount <= xentag->max_segments, ("busdma_xen: segcount too large:"
-				" segcount = %d, xentag->max_segments = %d", segcount,
+		KASSERT(segcount <= xentag->max_segments, ("busdma_xen: segcount too"
+				" large: segcount = %d, xentag->max_segments = %d", segcount,
 				xentag->max_segments));
 	}
 

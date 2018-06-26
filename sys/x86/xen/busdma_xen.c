@@ -90,7 +90,7 @@ struct load_op {
 			void *buf;
 			struct pmap *pmap;
 		} buffer;
-	} u;
+	};
 };
 
 struct bus_dma_impl bus_dma_xen_impl;
@@ -343,8 +343,8 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 	switch (op.type) {
 		case LOAD_MA:
 		{
-			struct vm_page **ma = op.u.ma.ma;
-			int ma_offs = op.u.ma.ma_offs;
+			struct vm_page **ma = op.ma.ma;
+			int ma_offs = op.ma.ma_offs;
 
 			error = _bus_dmamap_load_ma(xentag->parent, xenmap->map, ma,
 					op.size, ma_offs, op.flags, op.segs, op.segp);
@@ -352,7 +352,7 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 		}
 		case LOAD_PHYS:
 		{
-			vm_paddr_t buf = op.u.phys.buf;
+			vm_paddr_t buf = op.phys.buf;
 
 			error = _bus_dmamap_load_phys(xentag->parent, xenmap->map, buf,
 					op.size, op.flags, op.segs, op.segp);
@@ -360,8 +360,8 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 		}
 		case LOAD_BUFFER:
 		{
-			void *buf = op.u.buffer.buf;
-			struct pmap *pmap = op.u.buffer.pmap;
+			void *buf = op.buffer.buf;
+			struct pmap *pmap = op.buffer.pmap;
 
 			error = _bus_dmamap_load_buffer(xentag->parent, xenmap->map, buf,
 					op.size, pmap, op.flags, op.segs, op.segp);

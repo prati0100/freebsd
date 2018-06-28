@@ -454,11 +454,12 @@ xen_bus_dmamap_load_ma(bus_dma_tag_t dmat, bus_dmamap_t map,
 {
 	struct bus_dma_tag_xen *xentag;
 	struct bus_dmamap_xen *xenmap;
+	struct load_op op;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	xenmap = (struct bus_dmamap_xen *)map;
 
-	struct load_op op = {
+	op = {
 		LOAD_MA,
 		tlen,
 		flags,
@@ -477,11 +478,12 @@ xen_bus_dmamap_load_phys(bus_dma_tag_t dmat, bus_dmamap_t map,
 {
 	struct bus_dma_tag_xen *xentag;
 	struct bus_dmamap_xen *xenmap;
+	struct load_op op;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	xenmap = (struct bus_dmamap_xen *)map;
 
-	struct load_op op = {
+	op = {
 		LOAD_PHYS,
 		buflen,
 		flags,
@@ -500,11 +502,12 @@ xen_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map,
 {
 	struct bus_dma_tag_xen *xentag;
 	struct bus_dmamap_xen *xenmap;
+	struct load_op op;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	xenmap = (struct bus_dmamap_xen *)map;
 
-	struct load_op op = {
+	op = {
 		LOAD_BUFFER,
 		buflen,
 		flags,

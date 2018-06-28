@@ -459,14 +459,13 @@ xen_bus_dmamap_load_ma(bus_dma_tag_t dmat, bus_dmamap_t map,
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	xenmap = (struct bus_dmamap_xen *)map;
 
-	op = {
-		LOAD_MA,
-		tlen,
-		flags,
-		segs,
-		segp,
-		{.ma = {ma, ma_offs}}
-	};
+	op.type = LOAD_MA;
+	op.size = tlen;
+	op.flags = flags;
+	op.segs = segs;
+	op.segp = segp;
+	op.ma.ma = ma;
+	op.ma.ma_offs = ma_offs;
 
 	return (xen_load_helper(xentag, xenmap, op));
 }
@@ -483,14 +482,12 @@ xen_bus_dmamap_load_phys(bus_dma_tag_t dmat, bus_dmamap_t map,
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	xenmap = (struct bus_dmamap_xen *)map;
 
-	op = {
-		LOAD_PHYS,
-		buflen,
-		flags,
-		segs,
-		segp,
-		{.phys = {buf}}
-	};
+	op.type = LOAD_PHYS;
+	op.size = buflen;
+	op.flags = flags;
+	op.segs = segs;
+	op.segp = segp;
+	op.phys.buf = buf;
 
 	return (xen_load_helper(xentag, xenmap, op));
 }
@@ -507,14 +504,13 @@ xen_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map,
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	xenmap = (struct bus_dmamap_xen *)map;
 
-	op = {
-		LOAD_BUFFER,
-		buflen,
-		flags,
-		segs,
-		segp,
-		{.buffer = {buf, pmap}}
-	};
+	op.type = LOAD_BUFFER;
+	op.size = buflen;
+	op.flags = flags;
+	op.segs = segs;
+	op.segp = segp;
+	op.buffer.buf = buf;
+	op.buffer.pmap = pmap;
 
 	return (xen_load_helper(xentag, xenmap, op));
 }

@@ -684,6 +684,33 @@ xen_bus_dmamap_sync(bus_dma_tag_t dmat, bus_dmamap_t map, bus_dmasync_op_t op)
 	bus_dmamap_sync(xentag->parent, xenmap->map, op);
 }
 
+bus_dma_tag_t
+xen_get_dma_tag(bus_dma_tag_t parent)
+{
+	bus_dma_tag_t newtag;
+	bus_addr_t maxaddr;
+	int error;
+
+	maxaddr = BUS_SPACE_MAXADDR;
+
+	error = xen_bus_dma_tag_create(parent,
+			PAGE_SIZE, PAGE_SIZE,		/* alignment, boundary */
+			maxaddr,				/* lowaddr */
+			maxaddr,				/* highaddr */
+			NULL, NULL,				/* filtfunc, filtfuncarg */
+			maxaddr,				/* maxsize */
+			BUS_SPACE_UNRESTRICTED,	/* nsegments */
+			maxaddr,				/* maxsegsz */
+			0,						/* flags */
+			NULL, NULL,				/* lockfunc, lockfuncarg */
+			&newtag);
+	if (error) {
+		return (NULL);
+	}
+
+	return (newtag);
+}
+
 struct bus_dma_impl bus_dma_xen_impl = {
 	.tag_create = xen_bus_dma_tag_create,
 	.tag_destroy = xen_bus_dma_tag_destroy,

@@ -37,6 +37,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/smp.h>
 #include <sys/limits.h>
 #include <sys/vmmeter.h>
+#include <sys/ktr.h>
 
 #include <vm/vm.h>
 #include <vm/vm_page.h>
@@ -63,6 +64,9 @@ __FBSDID("$FreeBSD$");
 #endif
 
 static devclass_t xenpv_devclass;
+
+/* From sys/x86/xen/busdma_xen.c */
+bus_dma_tag_t xen_get_dma_tag(bus_dma_tag_t parent);
 
 static void
 xenpv_identify(driver_t *driver, device_t parent)
@@ -145,6 +149,25 @@ xenpv_free_physmem(device_t dev, device_t child, int res_id, struct resource *re
 	return (bus_release_resource(child, SYS_RES_MEMORY, res_id, res));
 }
 
+static bus_dma_tag_t
+xenpv_get_dma_tag(device_t bus, device_t child)
+{
+	bus_dma_tag_t parent, newtag;
+
+	parent = bus_get_dma_tag(bus);
+	if (parent == NULL) {
+		return (NULL);
+	}
+
+	newtag = xen_get_dma_tag(parent);
+
+	if (newtag == NULL) {
+		CTR1("xenpv: %s: newtag is NULL", __func__);
+	}
+
+	return (newtag);
+}
+
 static device_method_t xenpv_methods[] = {
 	/* Device interface */
 	DEVMETHOD(device_identify,		xenpv_identify),
@@ -159,6 +182,7 @@ static device_method_t xenpv_methods[] = {
 	DEVMETHOD(bus_release_resource,		bus_generic_release_resource),
 	DEVMETHOD(bus_activate_resource,	bus_generic_activate_resource),
 	DEVMETHOD(bus_deactivate_resource,	bus_generic_deactivate_resource),
+	DEVMETHOD(bus_get_dma_tag,			xenpv_get_dma_tag),
 
 	/* Interface to allocate memory for foreign mappings */
 	DEVMETHOD(xenmem_alloc,			xenpv_alloc_physmem),

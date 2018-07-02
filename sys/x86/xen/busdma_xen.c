@@ -40,6 +40,7 @@ __FBSDID("$FreeBSD$");
 #include <x86/include/busdma_impl.h>
 
 #include <xen/gnttab.h>
+#include <xen/busdma_xen.h>
 
 MALLOC_DEFINE(M_BUSDMA_XEN, "busdma_xen_buf", "Xen-specific bus_dma(9) buffer");
 

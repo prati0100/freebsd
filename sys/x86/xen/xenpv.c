@@ -46,6 +46,7 @@ __FBSDID("$FreeBSD$");
 
 #include <xen/xen-os.h>
 #include <xen/gnttab.h>
+#include <xen/busdma_xen.h>
 
 #include "xenmem_if.h"
 
@@ -64,9 +65,6 @@ __FBSDID("$FreeBSD$");
 #endif
 
 static devclass_t xenpv_devclass;
-
-/* From sys/x86/xen/busdma_xen.c */
-bus_dma_tag_t xen_get_dma_tag(bus_dma_tag_t parent);
 
 static void
 xenpv_identify(driver_t *driver, device_t parent)

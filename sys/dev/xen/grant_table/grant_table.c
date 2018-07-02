@@ -26,7 +26,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/rman.h>
 #include <machine/resource.h>
 #include <machine/cpu.h>
-#include <machine/bus.h>
 
 #include <xen/xen-os.h>
 #include <xen/hypervisor.h>

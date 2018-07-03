@@ -153,12 +153,8 @@ xenpv_get_dma_tag(device_t bus, device_t child)
 	bus_dma_tag_t parent, newtag;
 
 	parent = bus_get_dma_tag(bus);
-	if (parent == NULL) {
-		return (NULL);
-	}
 
 	newtag = xen_get_dma_tag(parent);
-
 	if (newtag == NULL) {
 		CTR1("xenpv: %s: newtag is NULL", __func__);
 	}

@@ -705,9 +705,6 @@ xen_get_dma_tag(bus_dma_tag_t parent)
 			0,						/* flags */
 			NULL, NULL,				/* lockfunc, lockfuncarg */
 			&newtag);
-	if (error) {
-		return (NULL);
-	}
 
 	return (newtag);
 }

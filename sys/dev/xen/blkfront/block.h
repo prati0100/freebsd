@@ -127,6 +127,7 @@ struct xbd_command {
 	xbd_cbcf_t		*cm_complete;
 	void			*cm_indirectionpages;
 	grant_ref_t		 cm_indirectionrefs[BLKIF_MAX_INDIRECT_PAGES_PER_REQUEST];
+	bus_dmamap_t	 cm_indirectionmap;
 };
 
 typedef enum {

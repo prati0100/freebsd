@@ -64,6 +64,7 @@ struct bus_dmamap_xen {
 
 	/* Flags. */
 	bool sleepable;
+	int gnttab_flags;
 };
 
 enum xen_load_type {
@@ -309,7 +310,8 @@ xen_gnttab_free_callback(void *arg)
 
 	for (i = 0; i < xenmap->nrefs; i++) {
 		xenmap->refs[i] = gnttab_claim_grant_reference(&gref_head);
-		gnttab_grant_foreign_access_ref(refs[i], domid, segs[i].ds_addr, 0);
+		gnttab_grant_foreign_access_ref(refs[i], domid, segs[i].ds_addr,
+				xenmap->gnttab_flags);
 		segs[i].ds_addr = refs[i];
 	}
 
@@ -334,6 +336,9 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 	unsigned int i;
 	/* The head of the grant ref list used for batch allocating the refs. */
 	grant_ref_t gref_head;
+
+	xenmap->gnttab_flags = op.flags >> 16;
+	op.flags &= 0xFFFF;
 
 	/*
 	 * segp contains the starting segment on entrace, and the ending segment on
@@ -580,7 +585,8 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	refs = xenmap->refs;
 
 	for (i = 0; i < xenmap->nrefs; i++) {
-		gnttab_grant_foreign_access_ref(refs[i], domid, segs[i].ds_addr, 0);
+		gnttab_grant_foreign_access_ref(refs[i], domid, segs[i].ds_addr,
+				xenmap->gnttab_flags);
 		segs[i].ds_addr = refs[i];
 	}
 
@@ -637,7 +643,8 @@ xen_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
 
 	/* TODO: Take segp into account in this loop. */
 	for (i = 0; i < xenmap->nrefs; i++) {
-		gnttab_grant_foreign_access_ref(refs[i], domid, segs[i].ds_addr, 0);
+		gnttab_grant_foreign_access_ref(refs[i], domid, segs[i].ds_addr,
+				xenmap->gnttab_flags);
 		segs[i].ds_addr = refs[i];
 	}
 

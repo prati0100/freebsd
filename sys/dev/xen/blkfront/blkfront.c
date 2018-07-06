@@ -1394,7 +1394,7 @@ xbd_connect(struct xbd_softc *sc)
 		indirectflags = BUS_DMA_NOWAIT | (1 << 16);
 		if (bus_dmamap_load(sc->xbd_io_dmat, cm->cm_indirectionmap,
 			indirectpages, PAGE_SIZE * sc->xbd_max_request_indirectpages,
-            xbd_indirectpage_cb, cm, indirectflags)) {
+			xbd_indirectpage_cb, cm, indirectflags)) {
 
 			contigfree(indirectpages, PAGE_SIZE *
 				sc->xbd_max_request_indirectpages, M_XENBLOCKFRONT);

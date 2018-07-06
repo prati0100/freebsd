@@ -113,7 +113,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 		return (EINVAL);
 	}
 
-	domid = flags >> 16;
+	domid = flags >> BUS_DMA_XEN_DOMID_SHIFT;
 	flags &= 0xffff;
 
 	*dmat = NULL;
@@ -337,7 +337,7 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 	/* The head of the grant ref list used for batch allocating the refs. */
 	grant_ref_t gref_head;
 
-	xenmap->gnttab_flags = op.flags >> 16;
+	xenmap->gnttab_flags = op.flags >> BUS_DMA_XEN_GNTTAB_FLAGS_SHIFT;
 	op.flags &= 0xFFFF;
 
 	/*

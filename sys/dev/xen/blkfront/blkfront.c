@@ -57,6 +57,7 @@ __FBSDID("$FreeBSD$");
 #include <xen/interface/grant_table.h>
 #include <xen/interface/io/protocols.h>
 #include <xen/xenbus/xenbusvar.h>
+#include <xen/busdma_xen.h>
 
 #include <machine/_inttypes.h>
 
@@ -1257,7 +1258,6 @@ xbd_connect(struct xbd_softc *sc)
 	unsigned int binfo;
 	int err, feature_barrier, feature_flush;
 	int i, flags;
-	domid_t otherend_id;
 
 	if (sc->xbd_state == XBD_STATE_CONNECTED ||
 	    sc->xbd_state == XBD_STATE_SUSPENDED)
@@ -1317,8 +1317,8 @@ xbd_connect(struct xbd_softc *sc)
 	sc->xbd_max_request_size =
 	    XBD_SEGS_TO_SIZE(sc->xbd_max_request_segments);
 
-	otherend_id = xenbus_get_otherend_id(sc->xbd_dev);
-	flags = BUS_DMA_ALLOCNOW | (otherend_id << 16);
+	flags = BUS_DMA_ALLOCNOW |
+		(xenbus_get_otherend_id(sc->xbd_dev) << BUS_DMA_XEN_DOMID_SHIFT);
 
 	/* Allocate datastructures based on negotiated values. */
 	err = bus_dma_tag_create(
@@ -1388,10 +1388,8 @@ xbd_connect(struct xbd_softc *sc)
 		}
 
 
-		/* The 1 tells load to grant read-only access */
-		/* XXX Is it better to define a macro that does this, or at least
-		 * replace the 16 with a macro? */
-		indirectflags = BUS_DMA_NOWAIT | (1 << 16);
+		/* Grant read-only access */
+		indirectflags = BUS_DMA_NOWAIT | BUS_DMA_XEN_RO;
 		if (bus_dmamap_load(sc->xbd_io_dmat, cm->cm_indirectionmap,
 			indirectpages, PAGE_SIZE * sc->xbd_max_request_indirectpages,
 			xbd_indirectpage_cb, cm, indirectflags)) {

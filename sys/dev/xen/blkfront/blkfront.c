@@ -1376,7 +1376,6 @@ xbd_connect(struct xbd_softc *sc)
 			continue;
 		}
 
-		/* XXX Is it OK to use xbd_io_tag, or should I create a new one */
 		if (bus_dmamap_create(sc->xbd_io_dmat, 0, &cm->cm_indirectionmap)) {
 			contigfree(indirectpages, PAGE_SIZE *
 				sc->xbd_max_request_indirectpages, M_XENBLOCKFRONT);

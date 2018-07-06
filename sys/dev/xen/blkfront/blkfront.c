@@ -1224,7 +1224,7 @@ xbd_indirectpage_cb(void *callback_arg, bus_dma_segment_t *segs, int nseg,
         int error)
 {
 	struct xbd_command *cm;
-	int i;
+	unsigned int i;
 
 	/* XXX What to do here? */
 	if (error) {

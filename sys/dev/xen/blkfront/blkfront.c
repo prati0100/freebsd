@@ -1382,7 +1382,6 @@ xbd_connect(struct xbd_softc *sc)
 			break;
 		}
 
-
 		/* Grant read-only access */
 		indirectflags = BUS_DMA_NOWAIT | BUS_DMA_XEN_RO;
 		if (bus_dmamap_load(sc->xbd_io_dmat, cm->cm_indirectionmap,

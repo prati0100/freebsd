@@ -362,6 +362,10 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 	xenmap->gnttab_flags = op.flags >> BUS_DMA_XEN_GNTTAB_FLAGS_SHIFT;
 	op.flags &= 0xFFFF;
 
+	KASSERT((xenmap->refs == NULL),
+		("%s: Load called on an already loaded map? It is not supported yet.",
+		__func__));
+
 	/*
 	 * segp contains the starting segment on entrace, and the ending segment on
 	 * exit. We can use it to calculate how many segments the map uses.

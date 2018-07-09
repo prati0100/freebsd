@@ -167,7 +167,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 static int
 xen_bus_dma_tag_destroy(bus_dma_tag_t dmat)
 {
-	struct bus_dma_tag_xen *xentag;
+	struct bus_dma_tag_xen *xentag, *xenparent;
 	int error;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
@@ -177,7 +177,19 @@ xen_bus_dma_tag_destroy(bus_dma_tag_t dmat)
 		return (error);
 	}
 
-	free(xentag, M_DEVBUF);
+	while (xentag != NULL) {
+		xenparent = (struct bus_dma_tag_xen *)xentag->common.parent;
+		if (atomic_fetchadd_int(&xentag->common.ref_count, -1) == 1) {
+			free(xentag, M_DEVBUF);
+			/*
+			 * Last reference count, so
+			 * release our reference
+			 * count on our parent.
+			 */
+			xentag = xenparent;
+		} else
+			xentag = NULL;
+	}
 
 	return (0);
 }

@@ -44,6 +44,9 @@ __FBSDID("$FreeBSD$");
 
 MALLOC_DEFINE(M_BUSDMA_XEN, "busdma_xen_buf", "Xen-specific bus_dma(9) buffer");
 
+/* BUS_DMA_BUS1 is reserved for bus functions to use as they wish. */
+#define BUSDMA_XEN_TAG_INIT BUS_DMA_BUS1
+
 struct bus_dma_tag_xen {
 	struct bus_dma_tag_common common;
 	bus_dma_tag_t parent;
@@ -106,7 +109,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 {
 	domid_t domid;
 	struct bus_dma_tag_xen *newtag;
-	bus_dma_tag_t newparent;
+	bus_dma_tag_t newparent, oldparent;
 	int error;
 
 	if (maxsegsz < PAGE_SIZE) {
@@ -115,6 +118,13 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 
 	domid = flags >> BUS_DMA_XEN_DOMID_SHIFT;
 	flags &= 0xffff;
+
+	if (flags & BUSDMA_XEN_TAG_INIT) {
+		oldparent = parent;
+	}
+	else {
+		oldparent = ((struct bus_dma_tag_xen *)parent)->parent;
+	}
 
 	*dmat = NULL;
 
@@ -125,7 +135,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	 * extract the physical addresses. So for those operations, we create
 	 * another tag from the parent and use it in those operations.
 	 */
-	error = common_bus_dma_tag_create(NULL, alignment, boundary, lowaddr,
+	error = common_bus_dma_tag_create(parent, alignment, boundary, lowaddr,
 			highaddr, filtfunc, filtfuncarg, maxsize, nsegments, maxsegsz,
 			flags, lockfunc, lockfuncarg, sizeof(struct bus_dma_tag_xen),
 			(void **)&newtag);
@@ -134,7 +144,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 		return (error);
 	}
 
-	error = bus_dma_tag_create(parent, alignment, boundary, lowaddr,
+	error = bus_dma_tag_create(oldparent, alignment, boundary, lowaddr,
 			highaddr, filtfunc, filtfuncarg, maxsize, nsegments, maxsegsz,
 			flags, lockfunc, lockfuncarg, &newparent);
 	if (error) {
@@ -709,7 +719,7 @@ xen_get_dma_tag(bus_dma_tag_t parent)
 			maxaddr,				/* maxsize */
 			BUS_SPACE_UNRESTRICTED,	/* nsegments */
 			maxaddr,				/* maxsegsz */
-			0,						/* flags */
+			BUSDMA_XEN_TAG_INIT,	/* flags */
 			NULL, NULL,				/* lockfunc, lockfuncarg */
 			&newtag);
 

@@ -1226,14 +1226,14 @@ xbd_indirectpage_cb(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	struct xbd_command *cm;
 	unsigned int i;
 
+	cm = callback_arg;
+
 	if (error) {
 		/* Disable indirection pages and continue. */
 		cm->cm_sc->xbd_max_request_segments = 0;
 		cm->cm_indirectionpages = NULL;
 		return;
 	}
-
-	cm = callback_arg;
 
 	KASSERT((nseg == cm->cm_sc->xbd_max_request_segments),
 		("%s: number of dma segments not equal to the expected number. "

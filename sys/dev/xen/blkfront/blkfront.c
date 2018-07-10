@@ -1239,9 +1239,7 @@ xbd_indirectpage_cb(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 		("%s: number of dma segments not equal to the expected number. "
 		"This is probably a bug in busdma_xen.c", __func__));
 
-	for (i = 0; i < nseg; i++) {
-		cm->cm_indirectionrefs[i] = segs[i].ds_addr;
-	}
+	cm->cm_indirectionrefs = xen_dmamap_get_grefs(cm->cm_indirectionmap);
 }
 
 /*

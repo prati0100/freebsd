@@ -38,5 +38,6 @@
 #define BUS_DMA_XEN_DOMID_SHIFT (16u)
 
 bus_dma_tag_t xen_get_dma_tag(bus_dma_tag_t parent);
+grant_ref_t * xen_dmamap_get_grefs(bus_dmamap_t map);
 
 #endif /* __XEN_BUSDMA_H */

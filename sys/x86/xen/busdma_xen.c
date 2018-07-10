@@ -120,6 +120,11 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 
 	if (flags & BUSDMA_XEN_TAG_INIT) {
 		oldparent = parent;
+		/*
+		 * The code below treats parent as a xen-specific DMA tag.
+		 * This parent can not be used there.
+		 */
+		parent = NULL;
 	}
 	else {
 		oldparent = ((struct bus_dma_tag_xen *)parent)->parent;
@@ -134,10 +139,11 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	 * extract the physical addresses. So for those operations, we create
 	 * another tag from the parent and use it in those operations.
 	 */
-	error = common_bus_dma_tag_create(parent, alignment, boundary, lowaddr,
-			highaddr, filtfunc, filtfuncarg, maxsize, nsegments, maxsegsz,
-			flags, lockfunc, lockfuncarg, sizeof(struct bus_dma_tag_xen),
-			(void **)&newtag);
+	error = common_bus_dma_tag_create(parent != NULL ?
+		&((struct bus_dma_tag_xen *)parent)->common : NULL, alignment, boundary,
+			lowaddr, highaddr, filtfunc, filtfuncarg, maxsize, nsegments,
+			maxsegsz, flags, lockfunc, lockfuncarg,
+			sizeof(struct bus_dma_tag_xen), (void **)&newtag);
 
 	if (error) {
 		return (error);

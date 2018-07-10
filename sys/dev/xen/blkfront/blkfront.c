@@ -1233,7 +1233,7 @@ xbd_indirectpage_cb(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 
 	cm = callback_arg;
 
-	KASSERT((nseg == BLKIF_MAX_INDIRECT_PAGES_PER_REQUEST),
+	KASSERT((nseg == cm->cm_sc->xbd_max_request_segments),
 		("%s: number of dma segments not equal to the expected number. "
 		"This is probably a bug in busdma_xen.c", __func__));
 

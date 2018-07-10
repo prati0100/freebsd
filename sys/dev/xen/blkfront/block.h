@@ -117,7 +117,6 @@ struct xbd_command {
 	uint64_t		 cm_id;
 	grant_ref_t		*cm_sg_refs;
 	struct bio		*cm_bp;
-	grant_ref_t		 cm_gref_head;
 	void			*cm_data;
 	size_t			 cm_datalen;
 	u_int			 cm_nseg;

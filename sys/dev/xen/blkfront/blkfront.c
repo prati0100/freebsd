@@ -160,14 +160,12 @@ xbd_free_command(struct xbd_command *cm)
 }
 
 static void
-xbd_mksegarray(bus_dma_segment_t *segs, int nsegs,
-    grant_ref_t * gref_head, int otherend_id, int readonly,
-    grant_ref_t * sg_ref, struct blkif_request_segment *sg)
+xbd_mksegarray(bus_dma_segment_t *segs, int nsegs, grant_ref_t * sg_ref,
+    struct blkif_request_segment *sg)
 {
 	struct blkif_request_segment *last_block_sg = sg + nsegs;
-	vm_paddr_t buffer_ma;
+    vm_paddr_t buffer_ma;
 	uint64_t fsect, lsect;
-	int ref;
 
 	while (sg < last_block_sg) {
 		KASSERT(segs->ds_addr % (1 << XBD_SECTOR_SHFT) == 0,
@@ -181,25 +179,14 @@ xbd_mksegarray(bus_dma_segment_t *segs, int nsegs,
 
 		KASSERT(lsect <= 7, ("XEN disk driver data cannot "
 		    "cross a page boundary"));
-
-		/* install a grant reference. */
-		ref = gnttab_claim_grant_reference(gref_head);
-
 		/*
 		 * GNTTAB_LIST_END == 0xffffffff, but it is private
 		 * to gnttab.c.
 		 */
-		KASSERT(ref != ~0, ("grant_reference failed"));
+		KASSERT(*sg_ref != ~0, ("grant_reference failed"));
 
-		gnttab_grant_foreign_access_ref(
-		    ref,
-		    otherend_id,
-		    buffer_ma >> PAGE_SHIFT,
-		    readonly);
-
-		*sg_ref = ref;
 		*sg = (struct blkif_request_segment) {
-			.gref       = ref,
+			.gref       = *sg_ref,
 			.first_sect = fsect,
 			.last_sect  = lsect
 		};
@@ -242,10 +229,8 @@ xbd_queue_cb(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
 		ring_req->handle = (blkif_vdev_t)(uintptr_t)sc->xbd_disk;
 		ring_req->nr_segments = nsegs;
 		cm->cm_nseg = nsegs;
-		xbd_mksegarray(segs, nsegs, &cm->cm_gref_head,
-		    xenbus_get_otherend_id(sc->xbd_dev),
-		    cm->cm_operation == BLKIF_OP_WRITE,
-		    cm->cm_sg_refs, ring_req->seg);
+        cm->cm_sg_refs = xen_dmamap_get_grefs(cm->cm_map);
+		xbd_mksegarray(segs, nsegs, cm->cm_sg_refs, ring_req->seg);
 	} else {
 		blkif_request_indirect_t *ring_req;
 
@@ -260,10 +245,8 @@ xbd_queue_cb(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
 		ring_req->handle = (blkif_vdev_t)(uintptr_t)sc->xbd_disk;
 		ring_req->nr_segments = nsegs;
 		cm->cm_nseg = nsegs;
-		xbd_mksegarray(segs, nsegs, &cm->cm_gref_head,
-		    xenbus_get_otherend_id(sc->xbd_dev),
-		    cm->cm_operation == BLKIF_OP_WRITE,
-		    cm->cm_sg_refs, cm->cm_indirectionpages);
+        cm->cm_sg_refs = xen_dmamap_get_grefs(cm->cm_map);
+		xbd_mksegarray(segs, nsegs, cm->cm_sg_refs, cm->cm_indirectionpages);
 		memcpy(ring_req->indirect_grefs, &cm->cm_indirectionrefs,
 		    sizeof(grant_ref_t) * sc->xbd_max_request_indirectpages);
 	}
@@ -275,8 +258,6 @@ xbd_queue_cb(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
 	else
 		op = 0;
 	bus_dmamap_sync(sc->xbd_io_dmat, cm->cm_map, op);
-
-	gnttab_free_grant_references(cm->cm_gref_head);
 
 	xbd_enqueue_cm(cm, XBD_Q_BUSY);
 
@@ -300,10 +281,12 @@ xbd_queue_request(struct xbd_softc *sc, struct xbd_command *cm)
 
 	if (cm->cm_bp != NULL)
 		error = bus_dmamap_load_bio(sc->xbd_io_dmat, cm->cm_map,
-		    cm->cm_bp, xbd_queue_cb, cm, 0);
+		    cm->cm_bp, xbd_queue_cb, cm,
+            (cm->cm_operation == BLKIF_OP_WRITE) ? BUS_DMA_XEN_RO : 0);
 	else
 		error = bus_dmamap_load(sc->xbd_io_dmat, cm->cm_map,
-		    cm->cm_data, cm->cm_datalen, xbd_queue_cb, cm, 0);
+		    cm->cm_data, cm->cm_datalen, xbd_queue_cb, cm,
+            (cm->cm_operation == BLKIF_OP_WRITE) ? BUS_DMA_XEN_RO : 0);
 	if (error == EINPROGRESS) {
 		/*
 		 * Maintain queuing order by freezing the queue.  The next
@@ -348,17 +331,6 @@ xbd_bio_command(struct xbd_softc *sc)
 	if ((cm = xbd_dequeue_cm(sc, XBD_Q_FREE)) == NULL) {
 		xbd_freeze(sc, XBDF_CM_SHORTAGE);
 		xbd_requeue_bio(sc, bp);
-		return (NULL);
-	}
-
-	if (gnttab_alloc_grant_references(sc->xbd_max_request_segments,
-	    &cm->cm_gref_head) != 0) {
-		gnttab_request_free_callback(&sc->xbd_callback,
-		    xbd_restart_queue_callback, sc,
-		    sc->xbd_max_request_segments);
-		xbd_freeze(sc, XBDF_GNT_SHORTAGE);
-		xbd_requeue_bio(sc, bp);
-		xbd_enqueue_cm(cm, XBD_Q_FREE);
 		return (NULL);
 	}
 
@@ -503,8 +475,6 @@ xbd_int(void *xsc)
 		cm   = &sc->xbd_shadow[bret->id];
 
 		xbd_remove_cm(cm, XBD_Q_BUSY);
-		gnttab_end_foreign_access_references(cm->cm_nseg,
-		    cm->cm_sg_refs);
 		i++;
 
 		if (cm->cm_operation == BLKIF_OP_READ)
@@ -620,14 +590,6 @@ xbd_dump(void *arg, void *virtual, vm_offset_t physical, off_t offset,
 		if (cm == NULL) {
 			mtx_unlock(&sc->xbd_io_lock);
 			device_printf(sc->xbd_dev, "dump: no more commands?\n");
-			return (EBUSY);
-		}
-
-		if (gnttab_alloc_grant_references(sc->xbd_max_request_segments,
-		    &cm->cm_gref_head) != 0) {
-			xbd_free_command(cm);
-			mtx_unlock(&sc->xbd_io_lock);
-			device_printf(sc->xbd_dev, "no more grant allocs?\n");
 			return (EBUSY);
 		}
 

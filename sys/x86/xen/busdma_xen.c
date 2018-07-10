@@ -332,8 +332,8 @@ xen_gnttab_free_callback(void *arg)
 
 	for (i = 0; i < xenmap->nrefs; i++) {
 		xenmap->refs[i] = gnttab_claim_grant_reference(&gref_head);
-		gnttab_grant_foreign_access_ref(refs[i], domid, segs[i].ds_addr,
-				xenmap->gnttab_flags);
+		gnttab_grant_foreign_access_ref(refs[i], domid,
+				segs[i].ds_addr >> PAGE_SHIFT, xenmap->gnttab_flags);
 		segs[i].ds_addr = refs[i];
 	}
 
@@ -611,8 +611,8 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	refs = xenmap->refs;
 
 	for (i = 0; i < xenmap->nrefs; i++) {
-		gnttab_grant_foreign_access_ref(refs[i], domid, segs[i].ds_addr,
-				xenmap->gnttab_flags);
+		gnttab_grant_foreign_access_ref(refs[i], domid,
+				segs[i].ds_addr >> PAGE_SHIFT, xenmap->gnttab_flags);
 		segs[i].ds_addr = refs[i];
 	}
 
@@ -669,8 +669,8 @@ xen_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
 
 	/* TODO: Take segp into account in this loop. */
 	for (i = 0; i < xenmap->nrefs; i++) {
-		gnttab_grant_foreign_access_ref(refs[i], domid, segs[i].ds_addr,
-				xenmap->gnttab_flags);
+		gnttab_grant_foreign_access_ref(refs[i], domid,
+				segs[i].ds_addr >> PAGE_SHIFT, xenmap->gnttab_flags);
 		segs[i].ds_addr = refs[i];
 	}
 

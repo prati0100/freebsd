@@ -1226,8 +1226,10 @@ xbd_indirectpage_cb(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	struct xbd_command *cm;
 	unsigned int i;
 
-	/* XXX What to do here? */
 	if (error) {
+		/* Disable indirection pages and continue. */
+		cm->cm_sc->xbd_max_request_segments = 0;
+		cm->cm_indirectionpages = NULL;
 		return;
 	}
 

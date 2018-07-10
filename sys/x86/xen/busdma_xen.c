@@ -50,7 +50,6 @@ MALLOC_DEFINE(M_BUSDMA_XEN, "busdma_xen_buf", "Xen-specific bus_dma(9) buffer");
 struct bus_dma_tag_xen {
 	struct bus_dma_tag_common common;
 	bus_dma_tag_t parent;
-	struct bus_dma_impl parent_impl;
 	unsigned int max_segments;
 	domid_t domid;
 };
@@ -153,8 +152,6 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	}
 
 	newtag->common.impl = &bus_dma_xen_impl;
-	/* Save a copy of parent's impl. */
-	newtag->parent_impl = *(((struct bus_dma_tag_common *)parent)->impl);
 	newtag->parent = newparent;
 	newtag->max_segments = nsegments;
 	newtag->domid = domid;

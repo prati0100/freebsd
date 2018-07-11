@@ -164,7 +164,7 @@ xbd_mksegarray(bus_dma_segment_t *segs, int nsegs, grant_ref_t * sg_ref,
     struct blkif_request_segment *sg)
 {
 	struct blkif_request_segment *last_block_sg = sg + nsegs;
-    vm_paddr_t buffer_ma;
+	vm_paddr_t buffer_ma;
 	uint64_t fsect, lsect;
 
 	while (sg < last_block_sg) {
@@ -229,7 +229,7 @@ xbd_queue_cb(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
 		ring_req->handle = (blkif_vdev_t)(uintptr_t)sc->xbd_disk;
 		ring_req->nr_segments = nsegs;
 		cm->cm_nseg = nsegs;
-        cm->cm_sg_refs = xen_dmamap_get_grefs(cm->cm_map);
+		cm->cm_sg_refs = xen_dmamap_get_grefs(cm->cm_map);
 		xbd_mksegarray(segs, nsegs, cm->cm_sg_refs, ring_req->seg);
 	} else {
 		blkif_request_indirect_t *ring_req;
@@ -245,7 +245,7 @@ xbd_queue_cb(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
 		ring_req->handle = (blkif_vdev_t)(uintptr_t)sc->xbd_disk;
 		ring_req->nr_segments = nsegs;
 		cm->cm_nseg = nsegs;
-        cm->cm_sg_refs = xen_dmamap_get_grefs(cm->cm_map);
+		cm->cm_sg_refs = xen_dmamap_get_grefs(cm->cm_map);
 		xbd_mksegarray(segs, nsegs, cm->cm_sg_refs, cm->cm_indirectionpages);
 		memcpy(ring_req->indirect_grefs, &cm->cm_indirectionrefs,
 		    sizeof(grant_ref_t) * sc->xbd_max_request_indirectpages);
@@ -281,12 +281,12 @@ xbd_queue_request(struct xbd_softc *sc, struct xbd_command *cm)
 
 	if (cm->cm_bp != NULL)
 		error = bus_dmamap_load_bio(sc->xbd_io_dmat, cm->cm_map,
-		    cm->cm_bp, xbd_queue_cb, cm,
-            (cm->cm_operation == BLKIF_OP_WRITE) ? BUS_DMA_XEN_RO : 0);
+			cm->cm_bp, xbd_queue_cb, cm,
+			(cm->cm_operation == BLKIF_OP_WRITE) ? BUS_DMA_XEN_RO : 0);
 	else
 		error = bus_dmamap_load(sc->xbd_io_dmat, cm->cm_map,
-		    cm->cm_data, cm->cm_datalen, xbd_queue_cb, cm,
-            (cm->cm_operation == BLKIF_OP_WRITE) ? BUS_DMA_XEN_RO : 0);
+			cm->cm_data, cm->cm_datalen, xbd_queue_cb, cm,
+			(cm->cm_operation == BLKIF_OP_WRITE) ? BUS_DMA_XEN_RO : 0);
 	if (error == EINPROGRESS) {
 		/*
 		 * Maintain queuing order by freezing the queue.  The next

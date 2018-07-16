@@ -1196,9 +1196,11 @@ xbd_indirectpage_cb(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 		return;
 	}
 
-	KASSERT((nseg == cm->cm_sc->xbd_max_request_segments),
+	KASSERT((nseg == cm->cm_sc->xbd_max_request_indirectpages),
 		("%s: number of dma segments not equal to the expected number. "
-		"This is probably a bug in busdma_xen.c", __func__));
+		"nseg = %d, xbd_max_request_segments = %d. Verify that the constraints"
+		"passed when creating the tag are correct.", __func__, nseg,
+		cm->cm_sc->xbd_max_request_segments));
 
 	cm->cm_indirectionrefs = xen_dmamap_get_grefs(cm->cm_indirectionmap);
 }

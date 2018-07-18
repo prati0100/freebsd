@@ -1289,7 +1289,7 @@ xbd_connect(struct xbd_softc *sc)
 	    sc->xbd_max_request_size,
 	    sc->xbd_max_request_segments,
 	    PAGE_SIZE,				/* maxsegsize */
-	    BUS_DMA_ALLOCNOW,			/* flags */
+	    flags,			/* flags */
 	    busdma_lock_mutex,			/* lockfunc */
 	    &sc->xbd_io_lock,			/* lockarg */
 	    &sc->xbd_io_dmat);

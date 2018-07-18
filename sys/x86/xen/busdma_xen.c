@@ -476,6 +476,9 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 	return (0);
 
 	err:
+		KASSERT((error != 0),
+				("busdma_xen: %s: In error handling section but error is 0",
+				__func__));
 		/* Unload the map before returning. */
 		bus_dmamap_unload(xentag->parent, xenmap->map);
 		return (error);

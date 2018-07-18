@@ -247,7 +247,7 @@ xbd_queue_cb(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
 		cm->cm_nseg = nsegs;
 		cm->cm_sg_refs = xen_dmamap_get_grefs(cm->cm_map);
 		xbd_mksegarray(segs, nsegs, cm->cm_sg_refs, cm->cm_indirectionpages);
-		memcpy(ring_req->indirect_grefs, &cm->cm_indirectionrefs,
+		memcpy(ring_req->indirect_grefs, cm->cm_indirectionrefs,
 		    sizeof(grant_ref_t) * sc->xbd_max_request_indirectpages);
 	}
 

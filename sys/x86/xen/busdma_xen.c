@@ -95,7 +95,7 @@ struct load_op {
 	};
 };
 
-struct bus_dma_impl bus_dma_xen_impl;
+static struct bus_dma_impl bus_dma_xen_impl;
 
 static int
 xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
@@ -761,7 +761,7 @@ xen_dmamap_get_grefs(bus_dmamap_t map)
 	return (xenmap->refs);
 }
 
-struct bus_dma_impl bus_dma_xen_impl = {
+static struct bus_dma_impl bus_dma_xen_impl = {
 	.tag_create = xen_bus_dma_tag_create,
 	.tag_destroy = xen_bus_dma_tag_destroy,
 	.tag_set_domain = xen_bus_dma_tag_set_domain,

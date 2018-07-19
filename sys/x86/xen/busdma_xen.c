@@ -69,15 +69,13 @@ struct bus_dmamap_xen {
 	int gnttab_flags;
 };
 
-enum xen_load_type {
-	LOAD_MA,
-	LOAD_PHYS,
-	LOAD_BUFFER,
-	NOLOAD
-};
-
 struct load_op {
-	enum xen_load_type type;
+	enum xen_load_type {
+		LOAD_MA,
+		LOAD_PHYS,
+		LOAD_BUFFER,
+		NOLOAD
+	} type;
 	bus_size_t size;
 	int flags;
 	bus_dma_segment_t *segs;

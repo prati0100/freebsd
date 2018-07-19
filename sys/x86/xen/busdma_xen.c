@@ -252,7 +252,7 @@ xen_bus_dmamap_destroy(bus_dma_tag_t dmat, bus_dmamap_t map)
 	}
 
 	KASSERT(xenmap->refs == NULL,
-			("busdma_xen: xenmap->refs not NULL. Check if unload was called"));
+		("busdma_xen: xenmap->refs not NULL. Check if unload was called"));
 
 	free(xenmap, M_BUSDMA_XEN);
 	return (0);
@@ -299,7 +299,7 @@ xen_bus_dmamem_free(bus_dma_tag_t dmat, void *vaddr, bus_dmamap_t map)
 	bus_dmamem_free(xentag->parent, vaddr, xenmap->map);
 
 	KASSERT(xenmap->refs == NULL,
-			("busdma_xen: xenmap->refs not NULL. Check if unload was called"));
+		("busdma_xen: xenmap->refs not NULL. Check if unload was called"));
 
 	free(xenmap, M_BUSDMA_XEN);
 }
@@ -324,11 +324,11 @@ xen_gnttab_free_callback(void *arg)
 
 	error = gnttab_alloc_grant_references(xenmap->nrefs, &gref_head);
 	KASSERT((error == 0), ("busdma_xen: allocation of grant refs in the grant "
-			"table free callback failed."));
+		"table free callback failed."));
 
 	segs = xenmap->temp_segs;
 	KASSERT((segs != NULL),
-			("busdma_xen: %s: xenmap->temp_segs = NULL" , __func__));
+		("busdma_xen: %s: xenmap->temp_segs = NULL" , __func__));
 
 	for (i = 0; i < xenmap->nrefs; i++) {
 		refs[i] = gnttab_claim_grant_reference(&gref_head);
@@ -424,8 +424,8 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 		xenmap->nrefs = segcount;
 
 		KASSERT(segcount <= xentag->max_segments, ("busdma_xen: segcount too"
-				" large: segcount = %d, xentag->max_segments = %d", segcount,
-				xentag->max_segments));
+			" large: segcount = %d, xentag->max_segments = %d", segcount,
+			xentag->max_segments));
 	}
 
 	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
@@ -483,8 +483,7 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 
 err:
 	KASSERT((error != 0),
-			("busdma_xen: %s: In error handling section but error is 0",
-			__func__));
+		("busdma_xen: %s: In error handling section but error is 0", __func__));
 	/* Unload the map before returning. */
 	bus_dmamap_unload(xentag->parent, xenmap->map);
 	return (error);
@@ -710,7 +709,7 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 	xenmap->sleepable = false;
 
 	KASSERT((xenmap->temp_segs == NULL),
-			("busdma_xen: %s: xenmap->temp_segs not NULL.", __func__));
+		("busdma_xen: %s: xenmap->temp_segs not NULL.", __func__));
 
 	bus_dmamap_unload(xentag->parent, xenmap->map);
 }

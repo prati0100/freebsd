@@ -31,13 +31,13 @@
 #define __XEN_BUSDMA_H
 
 /* Amount of shift needed to encode/decode grant table flags in dma load flags. */
-#define BUS_DMA_XEN_GNTTAB_FLAGS_SHIFT (16)
+#define BUS_DMA_XEN_GNTTAB_FLAGS_SHIFT 16
 /* Grant read-only access. */
 #define BUS_DMA_XEN_RO (1u << BUS_DMA_XEN_GNTTAB_FLAGS_SHIFT)
 /* Amount of shift needed to encode/decode domin ID in dma tag create flags. */
-#define BUS_DMA_XEN_DOMID_SHIFT (16u)
+#define BUS_DMA_XEN_DOMID_SHIFT 16
 
 bus_dma_tag_t xen_get_dma_tag(bus_dma_tag_t parent);
-grant_ref_t * xen_dmamap_get_grefs(bus_dmamap_t map);
+grant_ref_t *xen_dmamap_get_grefs(bus_dmamap_t map);
 
 #endif /* __XEN_BUSDMA_H */

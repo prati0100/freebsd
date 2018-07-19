@@ -30,11 +30,31 @@
 #ifndef __XEN_BUSDMA_H
 #define __XEN_BUSDMA_H
 
-/* Amount of shift needed to encode/decode grant table flags in dma load flags. */
+/*
+ * Amount of shift needed to encode/decode grant table flags in dma load flags.
+ * It is used by the busdma implementation functions xen_bus_dmamap_load_ma(),
+ * xen_bus_dmamap_load_phys(), xen_bus_dmamap_load_buffer() to decode the
+ * flags that should be passed when doing grant table operations. The drivers
+ * should not directly use this value, and instead use BUS_DMA_XEN_RO.
+ */
 #define BUS_DMA_XEN_GNTTAB_FLAGS_SHIFT 16
-/* Grant read-only access. */
+
+/*
+ * This flag can be used by drivers to indicate that read-only access should be
+ * granted to the pages. They should do something like:
+ *
+ * flags = your_busdma_flags | BUS_DMA_XEN_RO;
+ */
 #define BUS_DMA_XEN_RO (1u << BUS_DMA_XEN_GNTTAB_FLAGS_SHIFT)
-/* Amount of shift needed to encode/decode domin ID in dma tag create flags. */
+
+/*
+ * Amount of shift needed to encode/decode domin ID in dma tag create flags.
+ * Used by xen_bus_dma_tag_create() to decode the domid from the flags passed.
+ * The client drivers should use this to encode the domid in the flags parameter
+ * passed to bus_dma_tag_create() by doing something like:
+ *
+ * flags = your_busdma_flags | (otherend_id << BUS_DMA_XEN_DOMID_SHIFT);
+ */
 #define BUS_DMA_XEN_DOMID_SHIFT 16
 
 bus_dma_tag_t xen_get_dma_tag(bus_dma_tag_t parent);

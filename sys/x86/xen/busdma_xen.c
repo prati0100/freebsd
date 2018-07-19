@@ -737,7 +737,7 @@ xen_get_dma_tag(bus_dma_tag_t parent)
 	maxaddr = BUS_SPACE_MAXADDR;
 
 	error = xen_bus_dma_tag_create(parent,
-			PAGE_SIZE, PAGE_SIZE,		/* alignment, boundary */
+			PAGE_SIZE, PAGE_SIZE,	/* alignment, boundary */
 			maxaddr,				/* lowaddr */
 			maxaddr,				/* highaddr */
 			NULL, NULL,				/* filtfunc, filtfuncarg */

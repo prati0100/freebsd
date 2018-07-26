@@ -301,20 +301,6 @@ xbd_queue_request(struct xbd_softc *sc, struct xbd_command *cm)
 	return (error);
 }
 
-static void
-xbd_restart_queue_callback(void *arg)
-{
-	struct xbd_softc *sc = arg;
-
-	mtx_lock(&sc->xbd_io_lock);
-
-	xbd_thaw(sc, XBDF_GNT_SHORTAGE);
-
-	xbd_startio(sc);
-
-	mtx_unlock(&sc->xbd_io_lock);
-}
-
 static struct xbd_command *
 xbd_bio_command(struct xbd_softc *sc)
 {

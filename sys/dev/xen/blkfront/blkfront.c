@@ -1022,6 +1022,8 @@ xbd_free(struct xbd_softc *sc)
 				    sc->xbd_max_request_indirectpages,
 				    M_XENBLOCKFRONT);
 				cm->cm_indirectionpages = NULL;
+				cm->cm_indirectionrefs = NULL;
+				cm->cm_indirectionmap = NULL;
 			}
 
 			bus_dmamap_destroy(sc->xbd_io_dmat, cm->cm_map);

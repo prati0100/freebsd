@@ -1010,10 +1010,6 @@ xbd_free(struct xbd_softc *sc)
 			struct xbd_command *cm;
 
 			cm = &sc->xbd_shadow[i];
-			if (cm->cm_sg_refs != NULL) {
-				free(cm->cm_sg_refs, M_XENBLOCKFRONT);
-				cm->cm_sg_refs = NULL;
-			}
 
 			if (cm->cm_indirectionpages != NULL) {
 				bus_dmamap_unload(sc->xbd_io_dmat, cm->cm_indirectionmap);
@@ -1303,11 +1299,6 @@ xbd_connect(struct xbd_softc *sc)
 		int indirectflags;
 
 		cm = &sc->xbd_shadow[i];
-		cm->cm_sg_refs = malloc(
-		    sizeof(grant_ref_t) * sc->xbd_max_request_segments,
-		    M_XENBLOCKFRONT, M_NOWAIT);
-		if (cm->cm_sg_refs == NULL)
-			break;
 		cm->cm_id = i;
 		cm->cm_flags = XBDCF_INITIALIZER;
 		cm->cm_sc = sc;

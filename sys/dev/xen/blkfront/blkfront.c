@@ -1011,6 +1011,10 @@ xbd_free(struct xbd_softc *sc)
 			struct xbd_command *cm;
 
 			cm = &sc->xbd_shadow[i];
+			if (cm->cm_sg_refs != NULL) {
+				bus_dmamap_unload(sc->xbd_io_dmat, cm->cm_map);
+				cm->cm_sg_refs = NULL;
+			}
 
 			if (cm->cm_indirectionpages != NULL) {
 				bus_dmamap_unload(sc->xbd_io_dmat, cm->cm_indirectionmap);

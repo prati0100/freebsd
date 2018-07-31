@@ -472,6 +472,7 @@ xbd_int(void *xsc)
 			op = 0;
 		bus_dmamap_sync(sc->xbd_io_dmat, cm->cm_map, op);
 		bus_dmamap_unload(sc->xbd_io_dmat, cm->cm_map);
+		cm->cm_sg_refs = NULL;
 
 		/*
 		 * Release any hold this command has on future command

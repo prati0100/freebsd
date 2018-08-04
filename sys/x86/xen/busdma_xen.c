@@ -130,16 +130,16 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	*dmat = NULL;
 
 	/*
-	 * We create two tags here. The first tag is the common tag. It will be used
-	 * to hold the xen-specific bus_dma_impl. But, in the map create and load
-	 * operations, we need to use the standard dma tag to load the dma maps and
-	 * extract the physical addresses. So for those operations, we create
-	 * another tag from the parent and use it in those operations.
+	 * We create two tags here. The first tag is the common tag. It will
+	 * be used to hold the xen-specific bus_dma_impl. But, in the map create
+	 * and load operations, we need to use the standard dma tag to load the
+	 * dma maps and extract the physical addresses. So for those operations,
+	 * we create another tag from the parent and use it in those operations.
 	 */
 	error = common_bus_dma_tag_create(parent != NULL ?
-	    &((struct bus_dma_tag_xen *)parent)->common : NULL, alignment, boundary,
-	    lowaddr, highaddr, filtfunc, filtfuncarg, maxsize, nsegments,
-	    maxsegsz, flags, lockfunc, lockfuncarg,
+	    &((struct bus_dma_tag_xen *)parent)->common : NULL, alignment,
+	    boundary, lowaddr, highaddr, filtfunc, filtfuncarg, maxsize,
+	    nsegments, maxsegsz, flags, lockfunc, lockfuncarg,
 	    sizeof(struct bus_dma_tag_xen), (void **)&newtag);
 
 	if (error) {
@@ -182,8 +182,8 @@ xen_bus_dma_tag_destroy(bus_dma_tag_t dmat)
 		if (atomic_fetchadd_int(&xentag->common.ref_count, -1) == 1) {
 			free(xentag, M_DEVBUF);
 			/*
-			 * Last reference count, so release our reference count on our
-			 * parent.
+			 * Last reference count, so release our reference count
+			 * on our parent.
 			 */
 			xentag = xenparent;
 		} else {
@@ -323,8 +323,8 @@ xen_gnttab_free_callback(void *arg)
 	callback = xenmap->callback;
 
 	error = gnttab_alloc_grant_references(xenmap->nrefs, &gref_head);
-	KASSERT((error == 0), ("busdma_xen: allocation of grant refs in the grant "
-	    "table free callback failed."));
+	KASSERT((error == 0), ("busdma_xen: allocation of grant refs in the "
+	    "grant table free callback failed."));
 
 	segs = xenmap->temp_segs;
 	KASSERT((segs != NULL),
@@ -367,8 +367,8 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 	    __func__));
 
 	/*
-	 * segp contains the starting segment on entrace, and the ending segment on
-	 * exit. We can use it to calculate how many segments the map uses.
+	 * segp contains the starting segment on entrace, and the ending segment
+	 *  on exit. We can use it to calculate how many segments the map uses.
 	 */
 	segcount = *op.segp;
 
@@ -381,8 +381,8 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 			ma = op.ma.ma;
 			ma_offs = op.ma.ma_offs;
 
-			error = _bus_dmamap_load_ma(xentag->parent, xenmap->map, ma,
-			    op.size, ma_offs, op.flags, op.segs, op.segp);
+			error = _bus_dmamap_load_ma(xentag->parent, xenmap->map,
+			     ma, op.size, ma_offs, op.flags, op.segs, op.segp);
 			break;
 		}
 		case LOAD_PHYS:
@@ -391,8 +391,9 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 
 			buf = op.phys.buf;
 
-			error = _bus_dmamap_load_phys(xentag->parent, xenmap->map, buf,
-			    op.size, op.flags, op.segs, op.segp);
+			error = _bus_dmamap_load_phys(xentag->parent,
+			     xenmap->map, buf, op.size, op.flags, op.segs,
+			     op.segp);
 			break;
 		}
 		case LOAD_BUFFER:
@@ -403,8 +404,9 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 			buf = op.buffer.buf;
 			pmap = op.buffer.pmap;
 
-			error = _bus_dmamap_load_buffer(xentag->parent, xenmap->map, buf,
-			    op.size, pmap, op.flags, op.segs, op.segp);
+			error = _bus_dmamap_load_buffer(xentag->parent,
+			    xenmap->map, buf, op.size, pmap, op.flags,
+			    op.segs, op.segp);
 			break;
 		}
 		case NOLOAD:
@@ -423,9 +425,9 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 		segcount = *op.segp - segcount;
 		xenmap->nrefs = segcount;
 
-		KASSERT(segcount <= xentag->max_segments, ("busdma_xen: segcount too"
-		    " large: segcount = %d, xentag->max_segments = %d", segcount,
-		    xentag->max_segments));
+		KASSERT(segcount <= xentag->max_segments, ("busdma_xen: "
+		    "segcount too large: segcount = %d, xentag->max_segments = "
+		    "%d", segcount,xentag->max_segments));
 	}
 
 	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
@@ -470,8 +472,8 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 		 */
 
 		if (xenmap->temp_segs == NULL) {
-			xenmap->temp_segs = malloc(xenmap->nrefs*sizeof(bus_dma_segment_t),
-			    M_BUSDMA_XEN, M_NOWAIT);
+			xenmap->temp_segs = malloc(xenmap->nrefs *
+			    sizeof(bus_dma_segment_t), M_BUSDMA_XEN, M_NOWAIT);
 			if (xenmap->temp_segs == NULL) {
 				free(xenmap->refs, M_BUSDMA_XEN);
 				xenmap->refs = NULL;
@@ -479,7 +481,10 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 				goto err;
 			}
 
-			/* Complete the parent's load cycle by calling map_complete. */
+			/*
+			 * Complete the parent's load cycle by calling
+			 * map_complete.
+			 */
 			segs = _bus_dmamap_complete(xentag->parent,
 			    xenmap->map, NULL, xenmap->nrefs, 0);
 
@@ -490,8 +495,8 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 		}
 
 		/*
-		 * Request a free callback so we will be notified when the grant refs
-		 * are available.
+		 * Request a free callback so we will be notified when the
+		 * grant refs are available.
 		 */
 		gnttab_request_free_callback(&xenmap->gnttab_callback,
 		    xen_gnttab_free_callback, xenmap,
@@ -500,7 +505,7 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 		return (EINPROGRESS);
 	}
 
-	/* Claim the grant references allocated and store them in the refs array. */
+	/* Claim the grant references allocated and store in the refs array. */
 	for (i = 0; i < xenmap->nrefs; i++) {
 		xenmap->refs[i] = gnttab_claim_grant_reference(&gref_head);
 	}
@@ -509,7 +514,8 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 
 err:
 	KASSERT((error != 0),
-	    ("busdma_xen: %s: In error handling section but error is 0", __func__));
+	    ("busdma_xen: %s: In error handling section but error is 0",
+	    __func__));
 	/* Unload the map before returning. */
 	bus_dmamap_unload(xentag->parent, xenmap->map);
 	return (error);
@@ -617,8 +623,8 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	 * load on the same tag is called. For a more detailed explaination,
 	 * check the comment in xen_load_helper().
 	 */
-	xenmap->temp_segs = malloc(nseg*sizeof(bus_dma_segment_t), M_BUSDMA_XEN,
-	    M_NOWAIT);
+	xenmap->temp_segs = malloc(nseg * sizeof(bus_dma_segment_t),
+	    M_BUSDMA_XEN, M_NOWAIT);
 	if (xenmap->temp_segs == NULL) {
 		(*callback)(xenmap->callback_arg, segs, nseg, (ENOMEM));
 		return;
@@ -671,13 +677,13 @@ xen_bus_dmamap_waitok(bus_dma_tag_t dmat, bus_dmamap_t map,
 	xenmap->sleepable = true;
 
 	/*
-	 * Some extra work has to be done before calling the client callback from
-	 * a deferred context. When the load gets deferred, the grant references
-	 * are not allocated. xen_dmamap_callback allocates the grant refs before
-	 * calling the client's callback.
+	 * Some extra work has to be done before calling the client callback
+	 * from a deferred context. When the load gets deferred, the grant
+	 * references are not allocated. xen_dmamap_callback allocates the
+	 * grant refs before calling the client's callback.
 	 */
-	_bus_dmamap_waitok(xentag->parent, xenmap->map, mem, xen_dmamap_callback,
-	    xenmap);
+	_bus_dmamap_waitok(xentag->parent, xenmap->map, mem,
+	    xen_dmamap_callback, xenmap);
 }
 
 static bus_dma_segment_t *

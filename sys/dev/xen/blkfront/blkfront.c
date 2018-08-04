@@ -1270,7 +1270,7 @@ xbd_connect(struct xbd_softc *sc)
 	    XBD_SEGS_TO_SIZE(sc->xbd_max_request_segments);
 
 	flags = BUS_DMA_ALLOCNOW |
-		(xenbus_get_otherend_id(sc->xbd_dev) << BUS_DMA_XEN_DOMID_SHIFT);
+	    (xenbus_get_otherend_id(sc->xbd_dev) << BUS_DMA_XEN_DOMID_SHIFT);
 
 	/* Allocate datastructures based on negotiated values. */
 	err = bus_dma_tag_create(
@@ -1327,7 +1327,8 @@ xbd_connect(struct xbd_softc *sc)
 			continue;
 		}
 
-		if (bus_dmamap_create(sc->xbd_io_dmat, 0, &cm->cm_indirectionmap)) {
+		if (bus_dmamap_create(sc->xbd_io_dmat, 0,
+		    &cm->cm_indirectionmap)) {
 			contigfree(indirectpages, PAGE_SIZE *
 			    sc->xbd_max_request_indirectpages, M_XENBLOCKFRONT);
 			break;

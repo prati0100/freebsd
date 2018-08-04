@@ -126,7 +126,7 @@ struct xbd_command {
 	xbd_cbcf_t		*cm_complete;
 	void			*cm_indirectionpages;
 	grant_ref_t		*cm_indirectionrefs;
-	bus_dmamap_t	 cm_indirectionmap;
+	bus_dmamap_t		 cm_indirectionmap;
 };
 
 typedef enum {

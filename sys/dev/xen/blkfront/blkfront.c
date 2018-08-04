@@ -214,7 +214,8 @@ xbd_queue_cb(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
 	}
 
 	KASSERT(nsegs <= sc->xbd_max_request_segments,
-	    ("Too many segments in a blkfront I/O"));
+	    ("Too many segments in a blkfront I/O. Current value: %d, max value: %d\n",
+		nsegs, sc->xbd_max_request_segments));
 
 	if (nsegs <= BLKIF_MAX_SEGMENTS_PER_REQUEST) {
 		blkif_request_t	*ring_req;
@@ -246,7 +247,8 @@ xbd_queue_cb(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
 		ring_req->nr_segments = nsegs;
 		cm->cm_nseg = nsegs;
 		cm->cm_sg_refs = xen_dmamap_get_grefs(cm->cm_map);
-		xbd_mksegarray(segs, nsegs, cm->cm_sg_refs, cm->cm_indirectionpages);
+		xbd_mksegarray(segs, nsegs, cm->cm_sg_refs,
+		    cm->cm_indirectionpages);
 		memcpy(ring_req->indirect_grefs, cm->cm_indirectionrefs,
 		    sizeof(grant_ref_t) * sc->xbd_max_request_indirectpages);
 	}
@@ -281,12 +283,12 @@ xbd_queue_request(struct xbd_softc *sc, struct xbd_command *cm)
 
 	if (cm->cm_bp != NULL)
 		error = bus_dmamap_load_bio(sc->xbd_io_dmat, cm->cm_map,
-			cm->cm_bp, xbd_queue_cb, cm,
-			(cm->cm_operation == BLKIF_OP_WRITE) ? BUS_DMA_XEN_RO : 0);
+		    cm->cm_bp, xbd_queue_cb, cm,
+		    (cm->cm_operation == BLKIF_OP_WRITE) ? BUS_DMA_XEN_RO : 0);
 	else
 		error = bus_dmamap_load(sc->xbd_io_dmat, cm->cm_map,
-			cm->cm_data, cm->cm_datalen, xbd_queue_cb, cm,
-			(cm->cm_operation == BLKIF_OP_WRITE) ? BUS_DMA_XEN_RO : 0);
+		    cm->cm_data, cm->cm_datalen, xbd_queue_cb, cm,
+		    (cm->cm_operation == BLKIF_OP_WRITE) ? BUS_DMA_XEN_RO : 0);
 	if (error == EINPROGRESS) {
 		/*
 		 * Maintain queuing order by freezing the queue.  The next
@@ -1017,8 +1019,10 @@ xbd_free(struct xbd_softc *sc)
 			}
 
 			if (cm->cm_indirectionpages != NULL) {
-				bus_dmamap_unload(sc->xbd_io_dmat, cm->cm_indirectionmap);
-				bus_dmamap_destroy(sc->xbd_io_dmat, cm->cm_indirectionmap);
+				bus_dmamap_unload(sc->xbd_io_dmat,
+				    cm->cm_indirectionmap);
+				bus_dmamap_destroy(sc->xbd_io_dmat,
+				    cm->cm_indirectionmap);
 				contigfree(cm->cm_indirectionpages, PAGE_SIZE *
 				    sc->xbd_max_request_indirectpages,
 				    M_XENBLOCKFRONT);
@@ -1186,10 +1190,10 @@ xbd_indirectpage_cb(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	}
 
 	KASSERT((nseg == cm->cm_sc->xbd_max_request_indirectpages),
-		("%s: number of dma segments not equal to the expected number. "
-		"nseg = %d, xbd_max_request_segments = %d. Verify that the constraints"
-		"passed when creating the tag are correct.", __func__, nseg,
-		cm->cm_sc->xbd_max_request_segments));
+	    ("%s: number of dma segments not equal to the expected number. "
+	    "nseg = %d, xbd_max_request_segments = %d. Verify that the "
+	    "constraints passed when creating the tag are correct.", __func__,
+	    nseg, cm->cm_sc->xbd_max_request_segments));
 
 	cm->cm_indirectionrefs = xen_dmamap_get_grefs(cm->cm_indirectionmap);
 }
@@ -1325,18 +1329,18 @@ xbd_connect(struct xbd_softc *sc)
 
 		if (bus_dmamap_create(sc->xbd_io_dmat, 0, &cm->cm_indirectionmap)) {
 			contigfree(indirectpages, PAGE_SIZE *
-				sc->xbd_max_request_indirectpages, M_XENBLOCKFRONT);
+			    sc->xbd_max_request_indirectpages, M_XENBLOCKFRONT);
 			break;
 		}
 
 		/* Grant read-only access */
 		indirectflags = BUS_DMA_NOWAIT | BUS_DMA_XEN_RO;
 		if (bus_dmamap_load(sc->xbd_io_dmat, cm->cm_indirectionmap,
-			indirectpages, PAGE_SIZE * sc->xbd_max_request_indirectpages,
-			xbd_indirectpage_cb, cm, indirectflags)) {
+		    indirectpages, PAGE_SIZE * sc->xbd_max_request_indirectpages,
+		    xbd_indirectpage_cb, cm, indirectflags)) {
 
 			contigfree(indirectpages, PAGE_SIZE *
-				sc->xbd_max_request_indirectpages, M_XENBLOCKFRONT);
+			    sc->xbd_max_request_indirectpages, M_XENBLOCKFRONT);
 			break;
 		}
 

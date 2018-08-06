@@ -214,8 +214,7 @@ xbd_queue_cb(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
 	}
 
 	KASSERT(nsegs <= sc->xbd_max_request_segments,
-	    ("Too many segments in a blkfront I/O. Current value: %d, max value: %d\n",
-		nsegs, sc->xbd_max_request_segments));
+	    ("Too many segments in a blkfront I/O"));
 
 	if (nsegs <= BLKIF_MAX_SEGMENTS_PER_REQUEST) {
 		blkif_request_t	*ring_req;

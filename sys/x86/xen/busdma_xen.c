@@ -48,25 +48,25 @@ MALLOC_DEFINE(M_BUSDMA_XEN, "busdma_xen_buf", "Xen-specific bus_dma(9) buffer");
 #define BUSDMA_XEN_TAG_INIT BUS_DMA_BUS1
 
 struct bus_dma_tag_xen {
-	struct bus_dma_tag_common common;
-	bus_dma_tag_t parent;
-	unsigned int max_segments;
-	domid_t domid;
+	struct bus_dma_tag_common 	common;
+	bus_dma_tag_t 			parent;
+	unsigned int 			max_segments;
+	domid_t 			domid;
 };
 
 struct bus_dmamap_xen {
-	struct bus_dma_tag_xen *tag;
-	bus_dmamap_t map;
-	grant_ref_t *refs;
-	unsigned int nrefs;
-	bus_dmamap_callback_t *callback;
-	void *callback_arg;
-	struct gnttab_free_callback gnttab_callback;
-	bus_dma_segment_t *temp_segs;
+	struct bus_dma_tag_xen 		*tag;
+	bus_dmamap_t 			 map;
+	grant_ref_t 			*refs;
+	unsigned int 			nrefs;
+	bus_dmamap_callback_t 		*callback;
+	void 				*callback_arg;
+	struct gnttab_free_callback 	gnttab_callback;
+	bus_dma_segment_t 		*temp_segs;
 
 	/* Flags. */
-	bool sleepable;
-	int gnttab_flags;
+	bool 				sleepable;
+	int 				gnttab_flags;
 };
 
 struct load_op {

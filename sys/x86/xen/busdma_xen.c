@@ -58,15 +58,17 @@ struct bus_dmamap_xen {
 	struct bus_dma_tag_xen 		*tag;
 	bus_dmamap_t 			 map;
 	grant_ref_t 			*refs;
-	unsigned int 			nrefs;
+	unsigned int 			 nrefs;
+
 	bus_dmamap_callback_t 		*callback;
 	void 				*callback_arg;
-	struct gnttab_free_callback 	gnttab_callback;
+
+	struct gnttab_free_callback 	 gnttab_callback;
 	bus_dma_segment_t 		*temp_segs;
 
 	/* Flags. */
-	bool 				sleepable;
-	int 				gnttab_flags;
+	bool 				 sleepable;
+	int 				 gnttab_flags;
 };
 
 struct load_op {

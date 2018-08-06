@@ -1315,7 +1315,7 @@ xbd_connect(struct xbd_softc *sc)
 	    sc->xbd_max_request_size,
 	    sc->xbd_max_request_segments,
 	    PAGE_SIZE,				/* maxsegsize */
-	    flags,					/* flags */
+	    flags,				/* flags */
 	    xbd_lockfunc,			/* lockfunc */
 	    sc,					/* lockarg */
 	    &sc->xbd_io_dmat);

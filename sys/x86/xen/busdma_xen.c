@@ -448,7 +448,7 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 		}
 
 		/*
-		 * This dance with temp_segs warrants a detailed explaination.
+		 * This dance with temp_segs warrants a detailed explanation.
 		 * The segs returned by map_complete() array would get
 		 * over-written when another load on the same tag is called. The
 		 * scope of the segs array is limited to the callback provided

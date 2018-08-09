@@ -68,6 +68,7 @@ struct bus_dmamap_xen {
 
 	/* Flags. */
 	bool 				 sleepable;
+	bool				 preallocated;
 	int 				 gnttab_flags;
 };
 
@@ -213,7 +214,9 @@ xen_bus_dmamap_create(bus_dma_tag_t dmat, int flags, bus_dmamap_t *mapp)
 {
 	struct bus_dma_tag_xen *xentag;
 	struct bus_dmamap_xen *xenmap;
+	grant_ref_t gref_head;
 	int error;
+	unsigned int i, nrefs;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 
@@ -234,6 +237,33 @@ xen_bus_dmamap_create(bus_dma_tag_t dmat, int flags, bus_dmamap_t *mapp)
 
 	xenmap->tag = xentag;
 
+	/* Check if we need to pre-allocate grant refs. */
+	if (flags & BUS_DMA_XEN_PREALLOC_REFS) {
+		nrefs = xentag->max_segments;
+		xenmap->refs = malloc(nrefs * sizeof(grant_ref_t),
+		    M_BUSDMA_XEN, M_NOWAIT);
+		if (xenmap->refs == NULL) {
+			bus_dmamap_destroy(dmat, (bus_dmamap_t)xenmap);
+			return (ENOMEM);
+		}
+
+		error = gnttab_alloc_grant_references(nrefs,
+		    &gref_head);
+		if (error) {
+			free(xenmap->refs, M_BUSDMA_XEN);
+			xenmap->refs = NULL;
+			bus_dmamap_destroy(dmat, (bus_dmamap_t)xenmap);
+			return (error);
+		}
+
+		for (i = 0; i < nrefs; i++) {
+			xenmap->refs[i] =
+			    gnttab_claim_grant_reference(&gref_head);
+		}
+
+		xenmap->preallocated = true;
+	}
+
 	*mapp = (bus_dmamap_t)xenmap;
 	return (0);
 }
@@ -251,6 +281,18 @@ xen_bus_dmamap_destroy(bus_dma_tag_t dmat, bus_dmamap_t map)
 	error = bus_dmamap_destroy(xentag->parent, xenmap->map);
 	if (error) {
 		return (error);
+	}
+
+	/*
+	 * If the grant references were pre-allocated on map creation, we need
+	 * to clean them up here. If not, unload has cleaned them up already.
+	 */
+	if (xenmap->preallocated) {
+		gnttab_end_foreign_access_references(xentag->max_segments,
+		    xenmap->refs);
+
+		free(xenmap->refs, M_BUSDMA_XEN);
+    		xenmap->refs = NULL;
 	}
 
 	KASSERT(xenmap->refs == NULL,
@@ -364,9 +406,14 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 	xenmap->gnttab_flags = op.flags >> BUS_DMA_XEN_GNTTAB_FLAGS_SHIFT;
 	op.flags &= 0xFFFF;
 
-	KASSERT((xenmap->refs == NULL),
-	    ("%s: Load called on an already loaded map? It is not supported yet.",
-	    __func__));
+	/* XXX What if a pre-allocated map is loaded twice? I should probably
+	 * add a flag of some sort that indicates if the map was already
+	 * loaded or not. */
+	if (!xenmap->preallocated) {
+		KASSERT((xenmap->refs == NULL),
+		    ("%s: Load called on an already loaded map? "
+		    "It is not supported yet.", __func__));
+	}
 
 	/*
 	 * segp contains the starting segment on entrace, and the ending segment
@@ -430,6 +477,11 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 		KASSERT(segcount <= xentag->max_segments, ("busdma_xen: "
 		    "segcount too large: segcount = %d, xentag->max_segments = "
 		    "%d", segcount,xentag->max_segments));
+	}
+
+	/* The grant refs were allocated on map creation. */
+	if (xenmap->preallocated) {
+		return (0);
 	}
 
 	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
@@ -735,10 +787,18 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 
 	refs = xenmap->refs;
 
-	gnttab_end_foreign_access_references(xenmap->nrefs, xenmap->refs);
+	/*
+	 * If the grant references were pre-allocated on map creation,
+	 * xen_bus_dmamap_destroy() will clean them up, don't do it here.
+	 */
+	if (!xenmap->preallocated) {
+		gnttab_end_foreign_access_references(xenmap->nrefs,
+		    xenmap->refs);
 
-	free(xenmap->refs, M_BUSDMA_XEN);
-	xenmap->refs = NULL;
+		free(xenmap->refs, M_BUSDMA_XEN);
+    		xenmap->refs = NULL;
+
+	}
 
 	/* Reset the flags. */
 	xenmap->sleepable = false;

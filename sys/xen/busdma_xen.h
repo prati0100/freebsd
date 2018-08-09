@@ -57,6 +57,19 @@
  */
 #define BUS_DMA_XEN_DOMID_SHIFT 16
 
+/*
+ * The drivers can pass it to map_create()'s flags to pre-allocate grant refs so
+ * they don't have to deal with failed grant reference allocation when loading.
+ * The number of grant references allocated is equal to the maximum number of
+ * segments passed upon tag creation.
+ *
+ * BUS_DMA_BUS2 is reserved for the busdma implementations to use as they wish.
+ *
+ * Note: Grant references are a scarce resource. Try to not pre-allocate too
+ * many grant references, or it might end up hindering other drivers.
+ */
+#define BUS_DMA_XEN_PREALLOC_REFS BUS_DMA_BUS2
+
 bus_dma_tag_t xen_get_dma_tag(bus_dma_tag_t parent);
 grant_ref_t *xen_dmamap_get_grefs(bus_dmamap_t map);
 

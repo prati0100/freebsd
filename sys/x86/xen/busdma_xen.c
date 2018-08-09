@@ -433,7 +433,7 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 	}
 
 	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
-			M_BUSDMA_XEN, M_NOWAIT);
+	    M_BUSDMA_XEN, M_NOWAIT);
 	if (xenmap->refs == NULL) {
 		error = ENOMEM;
 		goto err;

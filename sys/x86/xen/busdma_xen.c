@@ -217,7 +217,7 @@ xen_bus_dmamap_create(bus_dma_tag_t dmat, int flags, bus_dmamap_t *mapp)
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 
-	/* mapp should NULL in case of an error. */
+	/* mapp should be NULL in case of an error. */
 	*mapp = NULL;
 
 	xenmap = malloc(sizeof(struct bus_dmamap_xen), M_BUSDMA_XEN,
@@ -270,7 +270,7 @@ xen_bus_dmamem_alloc(bus_dma_tag_t dmat, void** vaddr, int flags,
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 
-	/* mapp should NULL in case of an error. */
+	/* mapp should be NULL in case of an error. */
 	*mapp = NULL;
 
 	xenmap = malloc(sizeof(struct bus_dmamap_xen), M_BUSDMA_XEN,

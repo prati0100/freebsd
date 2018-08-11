@@ -763,7 +763,6 @@ xen_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
 		return (segs);
 	}
 
-	/* TODO: Take segp into account in this loop. */
 	for (i = 0; i < xenmap->nrefs; i++) {
 		gnttab_grant_foreign_access_ref(refs[i], domid,
 		    atop(segs[i].ds_addr), xenmap->gnttab_flags);

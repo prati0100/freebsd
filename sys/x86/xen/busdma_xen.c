@@ -278,6 +278,10 @@ xen_bus_dmamap_destroy(bus_dma_tag_t dmat, bus_dmamap_t map)
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	xenmap = (struct bus_dmamap_xen *)map;
 
+	if (map == NULL) {
+		return (0);
+	}
+
 	error = bus_dmamap_destroy(xentag->parent, xenmap->map);
 	if (error) {
 		return (error);

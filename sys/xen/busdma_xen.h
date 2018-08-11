@@ -71,6 +71,17 @@
 #define BUS_DMA_XEN_PREALLOC_REFS BUS_DMA_BUS2
 
 bus_dma_tag_t xen_get_dma_tag(bus_dma_tag_t parent);
+
+/*
+ * Get the grant references corresponding to MAP.
+ *
+ * The number of grant references is equal to the number of segments, which is
+ * passed to the callback specified when loading the map.
+ *
+ * Note: Do not modify the grant reference array returned in any way. It is
+ * allocated and freed by the dmamap, and it should be considered read-only by
+ * the client drivers.
+ */
 grant_ref_t *xen_dmamap_get_grefs(bus_dmamap_t map);
 
 #endif /* __XEN_BUSDMA_H */

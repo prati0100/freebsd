@@ -343,6 +343,21 @@ xn_repool_rx_map(struct netfront_rxq *rxq, bus_dmamap_t map)
 	rxq->map_pool[++rxq->pool_idx] = map;
 }
 
+static inline grant_ref_t
+xn_get_map_gref(bus_dmamap_t map)
+{
+	grant_ref_t *refs;
+
+	/*
+	 * We assume that there is only one grant reference. It is the
+	 * responsibility of the function calling the load to make sure this
+	 * assumption holds true.
+	 */
+	refs = xen_dmamap_get_grefs(map);
+
+	return *refs;
+}
+
 #define IPRINTK(fmt, args...) \
     printf("[XEN] " fmt, ##args)
 #ifdef INVARIANTS
@@ -1167,8 +1182,7 @@ xn_alloc_rx_buffers(struct netfront_rxq *rxq)
 		error = bus_dmamap_load_mbuf(rxq->info->xn_dmat, map,
 		    m, xn_dma_rx_cb, rxq, 0);
 
-		/* XXX Improve readability. */
-		ref = rxq->grant_ref[id] = xen_dmamap_get_grefs(map)[0];
+		ref = rxq->grant_ref[id] = xn_get_map_gref(map);
 
 		req = RING_GET_REQUEST(&rxq->ring, req_prod);
 
@@ -1997,7 +2011,7 @@ xn_rebuild_rx_bufs(struct netfront_rxq *rxq)
 		    xn_dma_rx_cb, rxq, 0);
 		KASSERT(error == 0, ("%s: load failed", __func__));
 
-		ref = rxq->grant_ref[requeue_idx] = xen_dmamap_get_grefs(map)[0];
+		ref = rxq->grant_ref[requeue_idx] = xn_get_map_gref(map);
 		rxq->grant_ref[requeue_idx] = ref;
 
 		req->gref = ref;

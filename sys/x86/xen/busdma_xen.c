@@ -784,6 +784,7 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 	struct bus_dma_tag_xen *xentag;
 	struct bus_dmamap_xen *xenmap;
 	grant_ref_t *refs;
+	unsigned int i;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	xenmap = (struct bus_dmamap_xen *)map;
@@ -792,15 +793,19 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 
 	/*
 	 * If the grant references were pre-allocated on map creation,
-	 * xen_bus_dmamap_destroy() will clean them up, don't do it here.
+	 * xen_bus_dmamap_destroy() will clean them up, don't do it here. Just
+	 * end foreign access.
 	 */
-	if (!xenmap->preallocated) {
+	if (xenmap->preallocated) {
+		for (i = 0; i < xenmap->nrefs; i++) {
+			gnttab_end_foreign_access_ref(xenmap->refs[i]);
+		}
+	} else {
 		gnttab_end_foreign_access_references(xenmap->nrefs,
 		    xenmap->refs);
 
 		free(xenmap->refs, M_BUSDMA_XEN);
     		xenmap->refs = NULL;
-
 	}
 
 	/* Reset the flags. */

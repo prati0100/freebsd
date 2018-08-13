@@ -1430,13 +1430,15 @@ xn_intr(void *xsc)
 
 static void
 xn_move_rx_slot(struct netfront_rxq *rxq, struct mbuf *m,
-    grant_ref_t ref)
+    grant_ref_t ref, bus_dmamap_t map)
 {
 	int new = xn_rxidx(rxq->ring.req_prod_pvt);
 
 	KASSERT(rxq->mbufs[new] == NULL, ("mbufs != NULL"));
+	KASSERT(rxq->maps[new] == NULL, ("maps != NULL"));
 	rxq->mbufs[new] = m;
 	rxq->grant_ref[new] = ref;
+	rxq->maps[new] = map;
 	RING_GET_REQUEST(&rxq->ring, rxq->ring.req_prod_pvt)->id = new;
 	RING_GET_REQUEST(&rxq->ring, rxq->ring.req_prod_pvt)->gref = ref;
 	rxq->ring.req_prod_pvt++;
@@ -1453,6 +1455,7 @@ xn_get_extras(struct netfront_rxq *rxq,
 	do {
 		struct mbuf *m;
 		grant_ref_t ref;
+		bus_dmamap_t map;
 
 		if (__predict_false(*cons + 1 == rp)) {
 			err = EINVAL;
@@ -1471,7 +1474,8 @@ xn_get_extras(struct netfront_rxq *rxq,
 
 		m = xn_get_rx_mbuf(rxq, *cons);
 		ref = xn_get_rx_ref(rxq,  *cons);
-		xn_move_rx_slot(rxq, m, ref);
+		map = xn_get_rx_map(rxq, *cons);
+		xn_move_rx_slot(rxq, m, ref, map);
 	} while (extra->flags & XEN_NETIF_EXTRA_FLAG_MORE);
 
 	return err;
@@ -1511,7 +1515,7 @@ xn_get_responses(struct netfront_rxq *rxq,
 		if (__predict_false(rx->status < 0 ||
 			rx->offset + rx->status > PAGE_SIZE)) {
 
-			xn_move_rx_slot(rxq, m, ref);
+			xn_move_rx_slot(rxq, m, ref, map);
 			if (m0 == m)
 				m0 = NULL;
 			m = NULL;

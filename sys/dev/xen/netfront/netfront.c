@@ -63,6 +63,8 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/bus.h>
 
+#include <machine/bus.h>
+
 #include <xen/xen-os.h>
 #include <xen/hypervisor.h>
 #include <xen/xen_intr.h>
@@ -70,6 +72,7 @@ __FBSDID("$FreeBSD$");
 #include <xen/interface/memory.h>
 #include <xen/interface/io/netif.h>
 #include <xen/xenbus/xenbusvar.h>
+#include <xen/busdma_xen.h>
 
 #include "xenbus_if.h"
 
@@ -169,8 +172,10 @@ struct netfront_rxq {
 	netif_rx_front_ring_t 	ring;
 	xen_intr_handle_t	xen_intr_handle;
 
-	grant_ref_t 		gref_head;
 	grant_ref_t 		grant_ref[NET_RX_RING_SIZE + 1];
+	bus_dmamap_t		map_pool[NET_RX_RING_SIZE + 1];
+	int			pool_idx;
+	bus_dmamap_t 		maps[NET_RX_RING_SIZE + 1];
 
 	struct mbuf		*mbufs[NET_RX_RING_SIZE + 1];
 
@@ -222,6 +227,8 @@ struct netfront_info {
 	struct ifmedia		sc_media;
 
 	bool			xn_reset;
+
+	bus_dma_tag_t		xn_dmat;
 };
 
 struct netfront_rx_info {
@@ -299,6 +306,41 @@ xn_get_rx_ref(struct netfront_rxq *rxq, RING_IDX ri)
 	KASSERT(ref != GRANT_REF_INVALID, ("Invalid grant reference!\n"));
 	rxq->grant_ref[i] = GRANT_REF_INVALID;
 	return (ref);
+}
+
+static inline bus_dmamap_t
+xn_get_rx_map(struct netfront_rxq *rxq, RING_IDX ri)
+{
+	int i;
+	bus_dmamap_t map;
+
+	i = xn_rxidx(ri);
+	map = rxq->maps[i];
+
+	KASSERT(map != NULL, ("Invalid dma map"));
+	rxq->maps[i] = NULL;
+	return(map);
+}
+
+/* XXX Suggest a better function name? */
+static inline bus_dmamap_t
+xn_unpool_rx_map(struct netfront_rxq *rxq)
+{
+	/* XXX Should I convert this to a KASSERT? */
+	if (rxq->pool_idx < 0) {
+		return (NULL);
+	}
+
+	return (rxq->map_pool[rxq->pool_idx--]);
+}
+
+static inline void
+xn_repool_rx_map(struct netfront_rxq *rxq, bus_dmamap_t map)
+{
+	KASSERT(rxq->pool_idx <= NET_RX_RING_SIZE,
+	    ("Too many rx maps"));
+
+	rxq->map_pool[++rxq->pool_idx] = map;
 }
 
 #define IPRINTK(fmt, args...) \
@@ -666,9 +708,18 @@ xn_txq_tq_deferred(void *xtxq, int pending)
 static void
 disconnect_rxq(struct netfront_rxq *rxq)
 {
+	int i, error;
 
 	xn_release_rx_bufs(rxq);
-	gnttab_free_grant_references(rxq->gref_head);
+	for (i = 0; i <= rxq->pool_idx; i++) {
+		error = bus_dmamap_destroy(rxq->info->xn_dmat,
+		    rxq->map_pool[i]);
+		KASSERT(error == 0, ("%s: destruction of map pool failed",
+		    __func__));
+	}
+
+	rxq->pool_idx = -1;
+
 	gnttab_end_foreign_access(rxq->ring_ref, NULL);
 	/*
 	 * No split event channel support at the moment, handle will
@@ -717,22 +768,26 @@ setup_rxqs(device_t dev, struct netfront_info *info,
 		rxq->info = info;
 		rxq->ring_ref = GRANT_REF_INVALID;
 		rxq->ring.sring = NULL;
+		rxq->pool_idx = -1;
 		snprintf(rxq->name, XN_QUEUE_NAME_LEN, "xnrx_%u", q);
 		mtx_init(&rxq->lock, rxq->name, "netfront receive lock",
 		    MTX_DEF);
 
 		for (i = 0; i <= NET_RX_RING_SIZE; i++) {
 			rxq->mbufs[i] = NULL;
-			rxq->grant_ref[i] = GRANT_REF_INVALID;
+			rxq->maps[i] = NULL;
 		}
 
 		/* Start resources allocation */
 
-		if (gnttab_alloc_grant_references(NET_RX_RING_SIZE,
-		    &rxq->gref_head) != 0) {
-			device_printf(dev, "allocating rx gref");
-			error = ENOMEM;
-			goto fail;
+		for (i = 0; i <= NET_RX_RING_SIZE; i++) {
+			error = bus_dmamap_create(info->xn_dmat,
+			    BUS_DMA_XEN_PREALLOC_REFS, &rxq->map_pool[i]);
+			if (error) {
+				device_printf(dev, "creating rx map failed");
+				goto fail;
+			}
+			rxq->pool_idx++;
 		}
 
 		rxs = (netif_rx_sring_t *)malloc(PAGE_SIZE, M_DEVBUF,
@@ -753,7 +808,6 @@ setup_rxqs(device_t dev, struct netfront_info *info,
 	return (0);
 
 fail_grant_ring:
-	gnttab_free_grant_references(rxq->gref_head);
 	free(rxq->ring.sring, M_DEVBUF);
 fail:
 	for (; q >= 0; q--) {
@@ -1058,11 +1112,22 @@ xn_alloc_one_rx_buffer(struct netfront_rxq *rxq)
 	return (m);
 }
 
+/* XXX When compiled without the option INVARIANTS, will the compiler complain
+ * about empty function. */
+static void
+xn_alloc_rx_cb(void *arg, bus_dma_segment_t *segs, int nseg, bus_size_t mapsz,
+    int error)
+{
+	KASSERT(error == 0, ("%s: Load failed", __func__));
+	KASSERT(nseg == 1, ("%s: More dma segments than expected", __func__));
+	KASSERT(mapsz == PAGE_SIZE, ("%s: map size != PAGE_SIZE", __func__));
+}
+
 static void
 xn_alloc_rx_buffers(struct netfront_rxq *rxq)
 {
 	RING_IDX req_prod;
-	int notify;
+	int notify, error;
 
 	XN_RX_LOCK_ASSERT(rxq);
 
@@ -1076,7 +1141,7 @@ xn_alloc_rx_buffers(struct netfront_rxq *rxq)
 		unsigned short id;
 		grant_ref_t ref;
 		struct netif_rx_request *req;
-		unsigned long pfn;
+		bus_dmamap_t map;
 
 		m = xn_alloc_one_rx_buffer(rxq);
 		if (m == NULL)
@@ -1087,16 +1152,19 @@ xn_alloc_rx_buffers(struct netfront_rxq *rxq)
 		KASSERT(rxq->mbufs[id] == NULL, ("non-NULL xn_rx_chain"));
 		rxq->mbufs[id] = m;
 
-		ref = gnttab_claim_grant_reference(&rxq->gref_head);
-		KASSERT(ref != GNTTAB_LIST_END,
-		    ("reserved grant references exhuasted"));
-		rxq->grant_ref[id] = ref;
+		/* Take a map from the pool. */
+		map = xn_unpool_rx_map(rxq);
+		KASSERT(map != NULL, ("Reserved dma map pool exhausted"));
+		rxq->maps[id] = map;
 
-		pfn = atop(vtophys(mtod(m, vm_offset_t)));
+		error = bus_dmamap_load_mbuf(rxq->info->xn_dmat, map,
+		    m, xn_alloc_rx_cb, rxq, 0);
+
+		/* XXX Improve readability. */
+		ref = rxq->grant_ref[id] = xen_dmamap_get_grefs(map)[0];
+
 		req = RING_GET_REQUEST(&rxq->ring, req_prod);
 
-		gnttab_grant_foreign_access_ref(ref,
-		    xenbus_get_otherend_id(rxq->info->xbdev), pfn, 0);
 		req->id = id;
 		req->gref = ref;
 	}
@@ -1130,8 +1198,9 @@ static void xn_alloc_rx_buffers_callout(void *arg)
 static void
 xn_release_rx_bufs(struct netfront_rxq *rxq)
 {
-	int i,  ref;
+	int i;
 	struct mbuf *m;
+	bus_dmamap_t map;
 
 	for (i = 0; i < NET_RX_RING_SIZE; i++) {
 		m = rxq->mbufs[i];
@@ -1139,12 +1208,13 @@ xn_release_rx_bufs(struct netfront_rxq *rxq)
 		if (m == NULL)
 			continue;
 
-		ref = rxq->grant_ref[i];
-		if (ref == GRANT_REF_INVALID)
-			continue;
+		map = rxq->maps[i];
 
-		gnttab_end_foreign_access_ref(ref);
-		gnttab_release_grant_reference(&rxq->gref_head, ref);
+		bus_dmamap_unload(rxq->info->xn_dmat, map);
+
+		/* Put the map back in the map pool. */
+		xn_repool_rx_map(rxq, map);
+
 		rxq->mbufs[i] = NULL;
 		rxq->grant_ref[i] = GRANT_REF_INVALID;
 		m_freem(m);
@@ -1412,7 +1482,8 @@ xn_get_responses(struct netfront_rxq *rxq,
 	RING_IDX ref_cons = *cons;
 	int frags = 1;
 	int err = 0;
-	u_long ret;
+	int i;
+	bus_dmamap_t map;
 
 	m0 = m = m_prev = xn_get_rx_mbuf(rxq, *cons);
 
@@ -1452,10 +1523,13 @@ xn_get_responses(struct netfront_rxq *rxq,
 			goto next;
 		}
 
-		ret = gnttab_end_foreign_access_ref(ref);
-		KASSERT(ret, ("Unable to end access to grant references"));
-
-		gnttab_release_grant_reference(&rxq->gref_head, ref);
+		i = xn_rxidx(*cons);
+		map = rxq->maps[i];
+		rxq->maps[i] = NULL;
+		KASSERT(map != NULL,
+		    ("Bad map corresponding to a valid grant ref"));
+		bus_dmamap_unload(rxq->info->xn_dmat, map);
+		xn_repool_rx_map(rxq, map);
 
 next:
 		if (m == NULL)
@@ -2207,7 +2281,7 @@ int
 create_netdev(device_t dev)
 {
 	struct netfront_info *np;
-	int err;
+	int err, flags;
 	struct ifnet *ifp;
 
 	np = device_get_softc(dev);
@@ -2221,6 +2295,27 @@ create_netdev(device_t dev)
 	ifmedia_set(&np->sc_media, IFM_ETHER|IFM_MANUAL);
 
 	err = xen_net_read_mac(dev, np->mac);
+	if (err != 0)
+		goto error;
+
+	/* XXX Should I create the dma tag here or in xn_connect()? */
+	/* Set up the dma tag. */
+
+	flags = xenbus_get_otherend_id(dev) << BUS_DMA_XEN_DOMID_SHIFT;
+	err = bus_dma_tag_create(
+	    bus_get_dma_tag(dev),		/* parent */
+	    512, PAGE_SIZE,			/* alignment, boundary */
+	    BUS_SPACE_MAXADDR,			/* lowaddr */
+	    BUS_SPACE_MAXADDR,			/* highaddr */
+	    NULL, NULL,				/* filter, filterarg */
+	    PAGE_SIZE,				/* maxsize */
+	    1,					/* nsegments */
+	    PAGE_SIZE,				/* maxsegsize */
+	    flags,				/* flags */
+	    busdma_lock_mutex,			/* lockfunc */
+	    &np->sc_lock,			/* lockarg */
+	    &np->xn_dmat);
+
 	if (err != 0)
 		goto error;
 

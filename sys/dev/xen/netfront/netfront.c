@@ -1224,6 +1224,7 @@ xn_release_rx_bufs(struct netfront_rxq *rxq)
 
 		rxq->mbufs[i] = NULL;
 		rxq->grant_ref[i] = GRANT_REF_INVALID;
+		rxq->maps[i] = NULL;
 		m_freem(m);
 	}
 }

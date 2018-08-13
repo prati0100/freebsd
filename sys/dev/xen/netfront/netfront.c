@@ -1494,10 +1494,10 @@ xn_get_responses(struct netfront_rxq *rxq,
 	RING_IDX ref_cons = *cons;
 	int frags = 1;
 	int err = 0;
-	int i;
 	bus_dmamap_t map;
 
 	m0 = m = m_prev = xn_get_rx_mbuf(rxq, *cons);
+	map = xn_get_rx_map(rxq, *cons);
 
 	if (rx->flags & NETRXF_extra_info) {
 		err = xn_get_extras(rxq, extras, rp, cons);
@@ -1520,6 +1520,7 @@ xn_get_responses(struct netfront_rxq *rxq,
 			if (m0 == m)
 				m0 = NULL;
 			m = NULL;
+			map = NULL;
 			err = EINVAL;
 			goto next_skip_queue;
 		}
@@ -1535,9 +1536,6 @@ xn_get_responses(struct netfront_rxq *rxq,
 			goto next;
 		}
 
-		i = xn_rxidx(*cons);
-		map = rxq->maps[i];
-		rxq->maps[i] = NULL;
 		KASSERT(map != NULL,
 		    ("Bad map corresponding to a valid grant ref"));
 		bus_dmamap_unload(rxq->info->xn_dmat, map);
@@ -1587,6 +1585,7 @@ next_skip_queue:
 			m0 = m;
 		m->m_next = NULL;
 		ref = xn_get_rx_ref(rxq, *cons + frags);
+		map = xn_get_rx_map(rxq, *cons + frags);
 		ref_cons = *cons + frags;
 		frags++;
 	}

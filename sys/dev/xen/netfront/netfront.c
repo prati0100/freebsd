@@ -1973,29 +1973,32 @@ xn_stop(struct netfront_info *sc)
 	if_link_state_change(ifp, LINK_STATE_DOWN);
 }
 
+/* XXX I'm not sure this is correct. */
 static void
 xn_rebuild_rx_bufs(struct netfront_rxq *rxq)
 {
-	int requeue_idx, i;
+	int requeue_idx, i, error;
 	grant_ref_t ref;
 	netif_rx_request_t *req;
+	bus_dmamap_t map;
 
 	for (requeue_idx = 0, i = 0; i < NET_RX_RING_SIZE; i++) {
 		struct mbuf *m;
-		u_long pfn;
 
 		if (rxq->mbufs[i] == NULL)
 			continue;
 
 		m = rxq->mbufs[requeue_idx] = xn_get_rx_mbuf(rxq, i);
-		ref = rxq->grant_ref[requeue_idx] = xn_get_rx_ref(rxq, i);
+		map = rxq->maps[requeue_idx] = xn_get_rx_map(rxq, i);
 
 		req = RING_GET_REQUEST(&rxq->ring, requeue_idx);
-		pfn = vtophys(mtod(m, vm_offset_t)) >> PAGE_SHIFT;
 
-		gnttab_grant_foreign_access_ref(ref,
-		    xenbus_get_otherend_id(rxq->info->xbdev),
-		    pfn, 0);
+		error = bus_dmamap_load_mbuf(rxq->info->xn_dmat, map, m,
+		    xn_dma_rx_cb, rxq, 0);
+		KASSERT(error == 0, ("%s: load failed", __func__));
+
+		ref = rxq->grant_ref[requeue_idx] = xen_dmamap_get_grefs(map)[0];
+		rxq->grant_ref[requeue_idx] = ref;
 
 		req->gref = ref;
 		req->id   = requeue_idx;

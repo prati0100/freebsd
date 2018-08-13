@@ -1114,8 +1114,15 @@ xn_alloc_one_rx_buffer(struct netfront_rxq *rxq)
 
 /* XXX When compiled without the option INVARIANTS, will the compiler complain
  * about empty function. */
+/*
+ * Callback received when the dma load is complete.
+ *
+ * This function is used by both xn_rebuild_rx_bufs() and xn_alloc_rx_buffers().
+ * If you want to add function-specific functionality, don't do it here. Create
+ * a new one.
+ */
 static void
-xn_alloc_rx_cb(void *arg, bus_dma_segment_t *segs, int nseg, bus_size_t mapsz,
+xn_dma_rx_cb(void *arg, bus_dma_segment_t *segs, int nseg, bus_size_t mapsz,
     int error)
 {
 	KASSERT(error == 0, ("%s: Load failed", __func__));
@@ -1158,7 +1165,7 @@ xn_alloc_rx_buffers(struct netfront_rxq *rxq)
 		rxq->maps[id] = map;
 
 		error = bus_dmamap_load_mbuf(rxq->info->xn_dmat, map,
-		    m, xn_alloc_rx_cb, rxq, 0);
+		    m, xn_dma_rx_cb, rxq, 0);
 
 		/* XXX Improve readability. */
 		ref = rxq->grant_ref[id] = xen_dmamap_get_grefs(map)[0];

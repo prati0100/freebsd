@@ -808,6 +808,8 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
     		xenmap->refs = NULL;
 	}
 
+	xenmap->nrefs = 0;
+
 	/* Reset the flags. */
 	xenmap->sleepable = false;
 

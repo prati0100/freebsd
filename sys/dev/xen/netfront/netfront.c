@@ -2392,12 +2392,15 @@ netfront_detach(device_t dev)
 static void
 netif_free(struct netfront_info *np)
 {
+	int error;
 
 	XN_LOCK(np);
 	xn_stop(np);
 	XN_UNLOCK(np);
 	netif_disconnect_backend(np);
 	ether_ifdetach(np->xn_ifp);
+	error = bus_dma_tag_destroy(np->xn_dmat);
+	KASSERT(error == 0, ("%s: DMA tag destruction failed", __func__));
 	free(np->rxq, M_DEVBUF);
 	free(np->txq, M_DEVBUF);
 	if_free(np->xn_ifp);

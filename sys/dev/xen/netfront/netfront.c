@@ -726,6 +726,10 @@ disconnect_rxq(struct netfront_rxq *rxq)
 	int i, error;
 
 	xn_release_rx_bufs(rxq);
+	if (rxq->pool_idx != NET_RX_RING_SIZE) {
+		printf("%s: Some maps are still in-use\n", __func__);
+	}
+
 	for (i = 0; i <= NET_RX_RING_SIZE; i++) {
 		error = bus_dmamap_destroy(rxq->info->xn_dmat,
 		    rxq->map_pool[i]);

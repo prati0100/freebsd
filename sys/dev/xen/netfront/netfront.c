@@ -1136,12 +1136,11 @@ xn_alloc_one_rx_buffer(struct netfront_rxq *rxq)
 /*
  * Callback received when the dma load is complete.
  *
- * This function is used by both xn_rebuild_rx_bufs() and xn_alloc_rx_buffers().
- * If you want to add function-specific functionality, don't do it here. Create
- * a new one.
+ * This function is a generic one used by rx and tx functions. If you want to
+ * add function-specific functionality, don't do it here. Create a new one.
  */
 static void
-xn_dma_rx_cb(void *arg, bus_dma_segment_t *segs, int nseg, bus_size_t mapsz,
+xn_dma_cb(void *arg, bus_dma_segment_t *segs, int nseg, bus_size_t mapsz,
     int error)
 {
 	KASSERT(error == 0, ("%s: Load failed", __func__));
@@ -1184,7 +1183,7 @@ xn_alloc_rx_buffers(struct netfront_rxq *rxq)
 		rxq->maps[id] = map;
 
 		error = bus_dmamap_load_mbuf(rxq->info->xn_dmat, map,
-		    m, xn_dma_rx_cb, rxq, 0);
+		    m, xn_dma_cb, rxq, 0);
 
 		ref = rxq->grant_ref[id] = xn_get_map_gref(map);
 
@@ -2012,7 +2011,7 @@ xn_rebuild_rx_bufs(struct netfront_rxq *rxq)
 		req = RING_GET_REQUEST(&rxq->ring, requeue_idx);
 
 		error = bus_dmamap_load_mbuf(rxq->info->xn_dmat, map, m,
-		    xn_dma_rx_cb, rxq, 0);
+		    xn_dma_cb, rxq, 0);
 		KASSERT(error == 0, ("%s: load failed", __func__));
 
 		ref = rxq->grant_ref[requeue_idx] = xn_get_map_gref(map);

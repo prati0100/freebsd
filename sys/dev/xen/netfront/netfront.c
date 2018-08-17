@@ -1140,12 +1140,11 @@ xn_alloc_one_rx_buffer(struct netfront_rxq *rxq)
  * add function-specific functionality, don't do it here. Create a new one.
  */
 static void
-xn_dma_cb(void *arg, bus_dma_segment_t *segs, int nseg, bus_size_t mapsz,
+xn_dma_cb(void *arg, bus_dma_segment_t *segs, int nseg,
     int error)
 {
 	KASSERT(error == 0, ("%s: Load failed", __func__));
 	KASSERT(nseg == 1, ("%s: More dma segments than expected", __func__));
-	KASSERT(mapsz == PAGE_SIZE, ("%s: map size != PAGE_SIZE", __func__));
 }
 
 static void
@@ -1182,8 +1181,8 @@ xn_alloc_rx_buffers(struct netfront_rxq *rxq)
 		KASSERT(map != NULL, ("Reserved dma map pool exhausted"));
 		rxq->maps[id] = map;
 
-		error = bus_dmamap_load_mbuf(rxq->info->xn_dmat, map,
-		    m, xn_dma_cb, rxq, 0);
+		error = bus_dmamap_load(rxq->info->xn_dmat, map, m->m_data,
+		    m->m_len, xn_dma_cb, rxq, 0);
 
 		ref = rxq->grant_ref[id] = xn_get_map_gref(map);
 
@@ -2010,8 +2009,8 @@ xn_rebuild_rx_bufs(struct netfront_rxq *rxq)
 
 		req = RING_GET_REQUEST(&rxq->ring, requeue_idx);
 
-		error = bus_dmamap_load_mbuf(rxq->info->xn_dmat, map, m,
-		    xn_dma_cb, rxq, 0);
+		error = bus_dmamap_load(rxq->info->xn_dmat, map, m->m_data,
+		    m->m_len, xn_dma_cb, rxq, 0);
 		KASSERT(error == 0, ("%s: load failed", __func__));
 
 		ref = rxq->grant_ref[requeue_idx] = xn_get_map_gref(map);

@@ -2334,7 +2334,7 @@ create_netdev(device_t dev)
 	flags = xenbus_get_otherend_id(dev) << BUS_DMA_XEN_DOMID_SHIFT;
 	err = bus_dma_tag_create(
 	    bus_get_dma_tag(dev),		/* parent */
-	    512, PAGE_SIZE,			/* alignment, boundary */
+	    1, PAGE_SIZE,			/* alignment, boundary */
 	    BUS_SPACE_MAXADDR,			/* lowaddr */
 	    BUS_SPACE_MAXADDR,			/* highaddr */
 	    NULL, NULL,				/* filter, filterarg */

@@ -174,7 +174,7 @@ struct netfront_rxq {
 
 	grant_ref_t 		grant_ref[NET_RX_RING_SIZE + 1];
 	bus_dmamap_t		map_pool[NET_RX_RING_SIZE + 1];
-	int			pool_idx;
+	unsigned int		pool_idx;
 	bus_dmamap_t 		maps[NET_RX_RING_SIZE + 1];
 
 	struct mbuf		*mbufs[NET_RX_RING_SIZE + 1];

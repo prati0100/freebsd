@@ -69,6 +69,7 @@ struct bus_dmamap_xen {
 	/* Flags. */
 	bool 				 sleepable;
 	bool				 preallocated;
+	bool				 loaded;
 	int 				 gnttab_flags;
 };
 
@@ -384,6 +385,8 @@ xen_gnttab_free_callback(void *arg)
 		    atop(segs[i].ds_addr), xenmap->gnttab_flags);
 	}
 
+	xenmap->loaded = true;
+
 	xentag->common.lockfunc(xentag->common.lockfuncarg, BUS_DMA_LOCK);
 	(*callback)(xenmap->callback_arg, segs, xenmap->nrefs, 0);
 	xentag->common.lockfunc(xentag->common.lockfuncarg,
@@ -412,13 +415,9 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 	xenmap->gnttab_flags = op.flags >> BUS_DMA_XEN_GNTTAB_FLAGS_SHIFT;
 	op.flags &= 0xFFFF;
 
-	/* XXX What if a pre-allocated map is loaded twice? I should probably
-	 * add a flag of some sort that indicates if the map was already
-	 * loaded or not. */
-	if (!xenmap->preallocated) {
-		KASSERT((xenmap->refs == NULL),
-		    ("%s: Load called on an already loaded map? "
-		    "It is not supported yet.", __func__));
+	if (xenmap->loaded) {
+		panic("%s: Load called on an already loaded map. "
+		    "It is not supported yet.", __func__);
 	}
 
 	/*
@@ -569,6 +568,8 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 	for (i = 0; i < xenmap->nrefs; i++) {
 		xenmap->refs[i] = gnttab_claim_grant_reference(&gref_head);
 	}
+
+	xenmap->loaded = true;
 
 	return (0);
 
@@ -814,6 +815,7 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 
 	/* Reset the flags. */
 	xenmap->sleepable = false;
+	xenmap->loaded = false;
 
 	KASSERT((xenmap->temp_segs == NULL),
 	    ("busdma_xen: %s: xenmap->temp_segs not NULL.", __func__));

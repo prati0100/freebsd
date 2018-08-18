@@ -347,20 +347,6 @@ xn_repool_rx_map(struct netfront_rxq *rxq, bus_dmamap_t map)
 	rxq->map_pool[++rxq->pool_idx] = map;
 }
 
-/*
- * Callback received when the dma load is complete.
- *
- * This function is a generic one used by rx and tx functions. If you want to
- * add function-specific functionality, don't do it here. Create a new one.
- */
-static void
-xn_dma_cb(void *arg, bus_dma_segment_t *segs, int nseg, int error)
-{
-	KASSERT(error == 0, ("%s: Load failed with error code %d", __func__,
-	    error));
-	KASSERT(nseg == 1, ("%s: More dma segments than expected", __func__));
-}
-
 static inline bus_dmamap_t
 xn_unpool_tx_map(struct netfront_txq *txq)
 {
@@ -394,6 +380,20 @@ xn_get_map_gref(bus_dmamap_t map)
 	refs = xen_dmamap_get_grefs(map);
 
 	return *refs;
+}
+
+/*
+ * Callback received when the dma load is complete.
+ *
+ * This function is a generic one used by rx and tx functions. If you want to
+ * add function-specific functionality, don't do it here. Create a new one.
+ */
+static void
+xn_dma_cb(void *arg, bus_dma_segment_t *segs, int nseg, int error)
+{
+	KASSERT(error == 0, ("%s: Load failed with error code %d", __func__,
+	    error));
+	KASSERT(nseg == 1, ("%s: More dma segments than expected", __func__));
 }
 
 #define IPRINTK(fmt, args...) \

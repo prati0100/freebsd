@@ -343,6 +343,22 @@ xn_repool_rx_map(struct netfront_rxq *rxq, bus_dmamap_t map)
 	rxq->map_pool[++rxq->pool_idx] = map;
 }
 
+/* XXX When compiled without the option INVARIANTS, will the compiler complain
+ * about empty function. */
+/*
+ * Callback received when the dma load is complete.
+ *
+ * This function is a generic one used by rx and tx functions. If you want to
+ * add function-specific functionality, don't do it here. Create a new one.
+ */
+static void
+xn_dma_cb(void *arg, bus_dma_segment_t *segs, int nseg,
+    int error)
+{
+	KASSERT(error == 0, ("%s: Load failed with error code %d", __func__,
+	    error));
+	KASSERT(nseg == 1, ("%s: More dma segments than expected", __func__));
+}
 static inline grant_ref_t
 xn_get_map_gref(bus_dmamap_t map)
 {
@@ -1155,22 +1171,6 @@ xn_alloc_one_rx_buffer(struct netfront_rxq *rxq)
 	m->m_len = m->m_pkthdr.len = MJUMPAGESIZE;
 
 	return (m);
-}
-
-/* XXX When compiled without the option INVARIANTS, will the compiler complain
- * about empty function. */
-/*
- * Callback received when the dma load is complete.
- *
- * This function is a generic one used by rx and tx functions. If you want to
- * add function-specific functionality, don't do it here. Create a new one.
- */
-static void
-xn_dma_cb(void *arg, bus_dma_segment_t *segs, int nseg,
-    int error)
-{
-	KASSERT(error == 0, ("%s: Load failed", __func__));
-	KASSERT(nseg == 1, ("%s: More dma segments than expected", __func__));
 }
 
 static void

@@ -196,8 +196,12 @@ struct netfront_txq {
 	netif_tx_front_ring_t	ring;
 	xen_intr_handle_t 	xen_intr_handle;
 
-	grant_ref_t		gref_head;
 	grant_ref_t		grant_ref[NET_TX_RING_SIZE + 1];
+
+	bus_dma_tag_t		dmat;
+	bus_dmamap_t		map_pool[NET_TX_RING_SIZE + 1];
+	unsigned int		pool_idx;
+	bus_dmamap_t 		maps[NET_TX_RING_SIZE + 1];
 
 	struct mbuf		*mbufs[NET_TX_RING_SIZE + 1];
 	int			mbufs_cnt;
@@ -359,6 +363,27 @@ xn_dma_cb(void *arg, bus_dma_segment_t *segs, int nseg,
 	    error));
 	KASSERT(nseg == 1, ("%s: More dma segments than expected", __func__));
 }
+
+static inline bus_dmamap_t
+xn_unpool_tx_map(struct netfront_txq *txq)
+{
+	if (txq->pool_idx < 0) {
+		return (NULL);
+	}
+
+	return (txq->map_pool[txq->pool_idx--]);
+}
+
+static inline void
+xn_repool_tx_map(struct netfront_txq *txq, bus_dmamap_t map)
+{
+	KASSERT(txq->pool_idx <= NET_TX_RING_SIZE,
+	    ("Too many tx maps"));
+	KASSERT(map != NULL, ("NULL map being put in the tx pool"));
+
+	txq->map_pool[++txq->pool_idx] = map;
+}
+
 static inline grant_ref_t
 xn_get_map_gref(bus_dmamap_t map)
 {
@@ -883,9 +908,25 @@ fail:
 static void
 disconnect_txq(struct netfront_txq *txq)
 {
-
+	int i, error;
 	xn_release_tx_bufs(txq);
-	gnttab_free_grant_references(txq->gref_head);
+	if (txq->pool_idx != NET_TX_RING_SIZE) {
+		printf("%s: Some maps are still in-use\n", __func__);
+	}
+
+	for (i = 0; i <= NET_TX_RING_SIZE; i++) {
+		error = bus_dmamap_destroy(txq->dmat,
+		    txq->map_pool[i]);
+		KASSERT(error == 0, ("%s: destruction of map pool failed",
+		    __func__));
+	}
+
+	txq->pool_idx = -1;
+
+	error = bus_dma_tag_destroy(txq->dmat);
+	KASSERT(error == 0, ("%s: destruction of txq dma tag failed",
+	     __func__));
+
 	gnttab_end_foreign_access(txq->ring_ref, NULL);
 	xen_intr_unbind(&txq->xen_intr_handle);
 }
@@ -917,18 +958,23 @@ setup_txqs(device_t dev, struct netfront_info *info,
 	   unsigned long num_queues)
 {
 	int q, i;
-	int error;
+	int error, flags;
 	netif_tx_sring_t *txs;
 	struct netfront_txq *txq;
 
 	info->txq = malloc(sizeof(struct netfront_txq) * num_queues,
 	    M_DEVBUF, M_WAITOK|M_ZERO);
 
+	/* Flags to be passed to bus_dma_tag_create(). */
+	flags = xenbus_get_otherend_id(dev) << BUS_DMA_XEN_DOMID_SHIFT;
+
 	for (q = 0; q < num_queues; q++) {
 		txq = &info->txq[q];
 
 		txq->id = q;
 		txq->info = info;
+
+		txq->pool_idx = -1;
 
 		txq->ring_ref = GRANT_REF_INVALID;
 		txq->ring.sring = NULL;
@@ -938,19 +984,41 @@ setup_txqs(device_t dev, struct netfront_info *info,
 		mtx_init(&txq->lock, txq->name, "netfront transmit lock",
 		    MTX_DEF);
 
+		error = bus_dma_tag_create(
+		    bus_get_dma_tag(dev),	/* parent */
+		    1, PAGE_SIZE,		/* alignment, boundary */
+		    BUS_SPACE_MAXADDR,		/* lowaddr */
+		    BUS_SPACE_MAXADDR,		/* highaddr */
+		    NULL, NULL,			/* filter, filterarg */
+		    PAGE_SIZE,			/* maxsize */
+		    1,				/* nsegments */
+		    PAGE_SIZE,			/* maxsegsize */
+		    flags,			/* flags */
+		    NULL,			/* lockfunc */
+		    NULL,			/* lockarg */
+		    &txq->dmat);
+		if (error) {
+			device_printf(dev, "Creating tx tag failed\n");
+			goto fail;
+		}
+
 		for (i = 0; i <= NET_TX_RING_SIZE; i++) {
 			txq->mbufs[i] = (void *) ((u_long) i+1);
 			txq->grant_ref[i] = GRANT_REF_INVALID;
+			txq->maps[i] = NULL;
 		}
 		txq->mbufs[NET_TX_RING_SIZE] = (void *)0;
 
 		/* Start resources allocation. */
 
-		if (gnttab_alloc_grant_references(NET_TX_RING_SIZE,
-		    &txq->gref_head) != 0) {
-			device_printf(dev, "failed to allocate tx grant refs\n");
-			error = ENOMEM;
-			goto fail;
+		for (i = 0; i <= NET_TX_RING_SIZE; i++) {
+			error = bus_dmamap_create(txq->dmat,
+			    BUS_DMA_XEN_PREALLOC_REFS, &txq->map_pool[i]);
+			if (error) {
+				device_printf(dev, "Creating tx map failed\n");
+				goto fail;
+			}
+			txq->pool_idx++;
 		}
 
 		txs = (netif_tx_sring_t *)malloc(PAGE_SIZE, M_DEVBUF,
@@ -1000,7 +1068,6 @@ fail_start_thread:
 	taskqueue_free(txq->tq);
 	gnttab_end_foreign_access(txq->ring_ref, NULL);
 fail_grant_ring:
-	gnttab_free_grant_references(txq->gref_head);
 	free(txq->ring.sring, M_DEVBUF);
 fail:
 	for (; q >= 0; q--) {
@@ -1147,10 +1214,15 @@ xn_release_tx_bufs(struct netfront_txq *txq)
 		 */
 		if (((uintptr_t)m) <= NET_TX_RING_SIZE)
 			continue;
-		gnttab_end_foreign_access_ref(txq->grant_ref[i]);
-		gnttab_release_grant_reference(&txq->gref_head,
-		    txq->grant_ref[i]);
+
+		bus_dmamap_unload(txq->dmat, txq->maps[i]);
+
+		/* Put the map back in the map pool. */
+		xn_repool_tx_map(txq, txq->maps[i]);
+
 		txq->grant_ref[i] = GRANT_REF_INVALID;
+		txq->maps[i] = NULL;
+
 		add_id_to_freelist(txq->mbufs, i);
 		txq->mbufs_cnt--;
 		if (txq->mbufs_cnt < 0) {
@@ -1423,10 +1495,12 @@ xn_txeof(struct netfront_txq *txq)
 				panic("%s: grant id %u still in use by the "
 				    "backend", __func__, id);
 			}
-			gnttab_end_foreign_access_ref(txq->grant_ref[id]);
-			gnttab_release_grant_reference(
-				&txq->gref_head, txq->grant_ref[id]);
+
+			bus_dmamap_unload(txq->dmat, txq->maps[id]);
+			xn_repool_tx_map(txq, txq->maps[id]);
+
 			txq->grant_ref[id] = GRANT_REF_INVALID;
+			txq->maps[id] = NULL;
 
 			txq->mbufs[id] = NULL;
 			add_id_to_freelist(txq->mbufs, id);
@@ -1664,7 +1738,7 @@ xn_assemble_tx_request(struct netfront_txq *txq, struct mbuf *m_head)
 	struct netfront_info *np = txq->info;
 	struct ifnet *ifp = np->xn_ifp;
 	u_int nfrags;
-	int otherend_id;
+	int error;
 
 	/**
 	 * Defragment the mbuf if necessary.
@@ -1735,12 +1809,11 @@ xn_assemble_tx_request(struct netfront_txq *txq, struct mbuf *m_head)
 	 * of fragments or hit the end of the mbuf chain.
 	 */
 	m = m_head;
-	otherend_id = xenbus_get_otherend_id(np->xbdev);
 	for (m = m_head; m; m = m->m_next) {
 		netif_tx_request_t *tx;
 		uintptr_t id;
 		grant_ref_t ref;
-		u_long mfn; /* XXX Wrong type? */
+		bus_dmamap_t map;
 
 		tx = RING_GET_REQUEST(&txq->ring, txq->ring.req_prod_pvt);
 		id = get_id_from_freelist(txq->mbufs);
@@ -1753,12 +1826,20 @@ xn_assemble_tx_request(struct netfront_txq *txq, struct mbuf *m_head)
 			    __func__);
 		txq->mbufs[id] = m;
 		tx->id = id;
-		ref = gnttab_claim_grant_reference(&txq->gref_head);
-		KASSERT((short)ref >= 0, ("Negative ref"));
-		mfn = virt_to_mfn(mtod(m, vm_offset_t));
-		gnttab_grant_foreign_access_ref(ref, otherend_id,
-		    mfn, GNTMAP_readonly);
-		tx->gref = txq->grant_ref[id] = ref;
+
+		/* Take a map from the pool. */
+		map = xn_unpool_tx_map(txq);
+		KASSERT(map != NULL, ("%s: Reserved dma map pool exhausted",
+		    __func__));
+		txq->maps[id] = map;
+
+		error = bus_dmamap_load(txq->dmat, map, m->m_data,
+		    m->m_len, xn_dma_cb, txq, BUS_DMA_XEN_RO |
+		    BUS_DMA_NOWAIT);
+
+		ref = txq->grant_ref[id] = xn_get_map_gref(map);
+
+		tx->gref = ref;
 		tx->offset = mtod(m, vm_offset_t) & (PAGE_SIZE - 1);
 		tx->flags = 0;
 		if (m == m_head) {

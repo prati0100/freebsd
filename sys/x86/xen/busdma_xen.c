@@ -407,6 +407,8 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 	grant_ref_t gref_head;
 	bus_dma_segment_t *segs;
 
+	KASSERT(xenmap != NULL, ("%s: Load called on a NULL map", __func__));
+
 	xenmap->gnttab_flags = op.flags >> BUS_DMA_XEN_GNTTAB_FLAGS_SHIFT;
 	op.flags &= 0xFFFF;
 

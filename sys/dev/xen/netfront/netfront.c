@@ -356,8 +356,7 @@ xn_repool_rx_map(struct netfront_rxq *rxq, bus_dmamap_t map)
  * add function-specific functionality, don't do it here. Create a new one.
  */
 static void
-xn_dma_cb(void *arg, bus_dma_segment_t *segs, int nseg,
-    int error)
+xn_dma_cb(void *arg, bus_dma_segment_t *segs, int nseg, int error)
 {
 	KASSERT(error == 0, ("%s: Load failed with error code %d", __func__,
 	    error));

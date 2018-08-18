@@ -173,6 +173,8 @@ struct netfront_rxq {
 	xen_intr_handle_t	xen_intr_handle;
 
 	grant_ref_t 		grant_ref[NET_RX_RING_SIZE + 1];
+
+	bus_dma_tag_t		dmat;
 	bus_dmamap_t		map_pool[NET_RX_RING_SIZE + 1];
 	unsigned int		pool_idx;
 	bus_dmamap_t 		maps[NET_RX_RING_SIZE + 1];
@@ -227,8 +229,6 @@ struct netfront_info {
 	struct ifmedia		sc_media;
 
 	bool			xn_reset;
-
-	bus_dma_tag_t		xn_dmat;
 };
 
 struct netfront_rx_info {
@@ -731,13 +731,17 @@ disconnect_rxq(struct netfront_rxq *rxq)
 	}
 
 	for (i = 0; i <= NET_RX_RING_SIZE; i++) {
-		error = bus_dmamap_destroy(rxq->info->xn_dmat,
+		error = bus_dmamap_destroy(rxq->dmat,
 		    rxq->map_pool[i]);
 		KASSERT(error == 0, ("%s: destruction of map pool failed",
 		    __func__));
 	}
 
 	rxq->pool_idx = -1;
+
+	error = bus_dma_tag_destroy(rxq->dmat);
+	KASSERT(error == 0, ("%s: destruction of rxq dma tag failed",
+	     __func__));
 
 	gnttab_end_foreign_access(rxq->ring_ref, NULL);
 	/*
@@ -773,12 +777,15 @@ setup_rxqs(device_t dev, struct netfront_info *info,
 	   unsigned long num_queues)
 {
 	int q, i;
-	int error;
+	int error, flags;
 	netif_rx_sring_t *rxs;
 	struct netfront_rxq *rxq;
 
 	info->rxq = malloc(sizeof(struct netfront_rxq) * num_queues,
 	    M_DEVBUF, M_WAITOK|M_ZERO);
+
+	/* Flags to be passed to bus_dma_tag_create(). */
+	flags = xenbus_get_otherend_id(dev) << BUS_DMA_XEN_DOMID_SHIFT;
 
 	for (q = 0; q < num_queues; q++) {
 		rxq = &info->rxq[q];
@@ -792,6 +799,25 @@ setup_rxqs(device_t dev, struct netfront_info *info,
 		mtx_init(&rxq->lock, rxq->name, "netfront receive lock",
 		    MTX_DEF);
 
+		error = bus_dma_tag_create(
+		    bus_get_dma_tag(dev),	/* parent */
+		    1, PAGE_SIZE,		/* alignment, boundary */
+		    BUS_SPACE_MAXADDR,		/* lowaddr */
+		    BUS_SPACE_MAXADDR,		/* highaddr */
+		    NULL, NULL,			/* filter, filterarg */
+		    PAGE_SIZE,			/* maxsize */
+		    1,				/* nsegments */
+		    PAGE_SIZE,			/* maxsegsize */
+		    flags,			/* flags */
+		    NULL,			/* lockfunc */
+		    NULL,			/* lockarg */
+		    &rxq->dmat);
+
+		if (error) {
+    			device_printf(dev, "Creating tx tag failed\n");
+    			goto fail;
+    		}
+
 		for (i = 0; i <= NET_RX_RING_SIZE; i++) {
 			rxq->mbufs[i] = NULL;
 			rxq->maps[i] = NULL;
@@ -800,7 +826,7 @@ setup_rxqs(device_t dev, struct netfront_info *info,
 		/* Start resources allocation */
 
 		for (i = 0; i <= NET_RX_RING_SIZE; i++) {
-			error = bus_dmamap_create(info->xn_dmat,
+			error = bus_dmamap_create(rxq->dmat,
 			    BUS_DMA_XEN_PREALLOC_REFS, &rxq->map_pool[i]);
 			if (error) {
 				device_printf(dev, "creating rx map failed");
@@ -1181,8 +1207,8 @@ xn_alloc_rx_buffers(struct netfront_rxq *rxq)
 		KASSERT(map != NULL, ("Reserved dma map pool exhausted"));
 		rxq->maps[id] = map;
 
-		error = bus_dmamap_load(rxq->info->xn_dmat, map, m->m_data,
-		    m->m_len, xn_dma_cb, rxq, 0);
+		error = bus_dmamap_load(rxq->dmat, map, m->m_data,
+		    m->m_len, xn_dma_cb, rxq, BUS_DMA_NOWAIT);
 
 		ref = rxq->grant_ref[id] = xn_get_map_gref(map);
 
@@ -1233,7 +1259,7 @@ xn_release_rx_bufs(struct netfront_rxq *rxq)
 
 		map = rxq->maps[i];
 
-		bus_dmamap_unload(rxq->info->xn_dmat, map);
+		bus_dmamap_unload(rxq->dmat, map);
 
 		/* Put the map back in the map pool. */
 		xn_repool_rx_map(rxq, map);
@@ -1554,7 +1580,7 @@ xn_get_responses(struct netfront_rxq *rxq,
 
 		KASSERT(map != NULL,
 		    ("Bad map corresponding to a valid grant ref"));
-		bus_dmamap_unload(rxq->info->xn_dmat, map);
+		bus_dmamap_unload(rxq->dmat, map);
 		xn_repool_rx_map(rxq, map);
 
 next:
@@ -2009,8 +2035,8 @@ xn_rebuild_rx_bufs(struct netfront_rxq *rxq)
 
 		req = RING_GET_REQUEST(&rxq->ring, requeue_idx);
 
-		error = bus_dmamap_load(rxq->info->xn_dmat, map, m->m_data,
-		    m->m_len, xn_dma_cb, rxq, 0);
+		error = bus_dmamap_load(rxq->dmat, map, m->m_data,
+		    m->m_len, xn_dma_cb, rxq, BUS_DMA_NOWAIT);
 		KASSERT(error == 0, ("%s: load failed", __func__));
 
 		ref = rxq->grant_ref[requeue_idx] = xn_get_map_gref(map);
@@ -2311,7 +2337,7 @@ int
 create_netdev(device_t dev)
 {
 	struct netfront_info *np;
-	int err, flags;
+	int err;
 	struct ifnet *ifp;
 
 	np = device_get_softc(dev);
@@ -2325,27 +2351,6 @@ create_netdev(device_t dev)
 	ifmedia_set(&np->sc_media, IFM_ETHER|IFM_MANUAL);
 
 	err = xen_net_read_mac(dev, np->mac);
-	if (err != 0)
-		goto error;
-
-	/* XXX Should I create the dma tag here or in xn_connect()? */
-	/* Set up the dma tag. */
-
-	flags = xenbus_get_otherend_id(dev) << BUS_DMA_XEN_DOMID_SHIFT;
-	err = bus_dma_tag_create(
-	    bus_get_dma_tag(dev),		/* parent */
-	    1, PAGE_SIZE,			/* alignment, boundary */
-	    BUS_SPACE_MAXADDR,			/* lowaddr */
-	    BUS_SPACE_MAXADDR,			/* highaddr */
-	    NULL, NULL,				/* filter, filterarg */
-	    PAGE_SIZE,				/* maxsize */
-	    1,					/* nsegments */
-	    PAGE_SIZE,				/* maxsegsize */
-	    flags,				/* flags */
-	    busdma_lock_mutex,			/* lockfunc */
-	    &np->sc_lock,			/* lockarg */
-	    &np->xn_dmat);
-
 	if (err != 0)
 		goto error;
 
@@ -2394,15 +2399,11 @@ netfront_detach(device_t dev)
 static void
 netif_free(struct netfront_info *np)
 {
-	int error;
-
 	XN_LOCK(np);
 	xn_stop(np);
 	XN_UNLOCK(np);
 	netif_disconnect_backend(np);
 	ether_ifdetach(np->xn_ifp);
-	error = bus_dma_tag_destroy(np->xn_dmat);
-	KASSERT(error == 0, ("%s: DMA tag destruction failed", __func__));
 	free(np->rxq, M_DEVBUF);
 	free(np->txq, M_DEVBUF);
 	if_free(np->xn_ifp);

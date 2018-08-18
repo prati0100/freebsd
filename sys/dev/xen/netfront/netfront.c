@@ -347,8 +347,6 @@ xn_repool_rx_map(struct netfront_rxq *rxq, bus_dmamap_t map)
 	rxq->map_pool[++rxq->pool_idx] = map;
 }
 
-/* XXX When compiled without the option INVARIANTS, will the compiler complain
- * about empty function. */
 /*
  * Callback received when the dma load is complete.
  *

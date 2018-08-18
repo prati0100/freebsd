@@ -2115,7 +2115,6 @@ xn_rebuild_rx_bufs(struct netfront_rxq *rxq)
 
 		error = bus_dmamap_load(rxq->dmat, map, m->m_data,
 		    m->m_len, xn_dma_cb, rxq, BUS_DMA_NOWAIT);
-		KASSERT(error == 0, ("%s: load failed", __func__));
 
 		ref = rxq->grant_ref[requeue_idx] = xn_get_map_gref(map);
 		rxq->grant_ref[requeue_idx] = ref;

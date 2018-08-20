@@ -868,7 +868,7 @@ setup_rxqs(device_t dev, struct netfront_info *info,
 			    BUS_DMA_XEN_PREALLOC_REFS, &rxq->map_pool[i]);
 			if (error) {
 				device_printf(dev, "creating rx map failed");
-				goto fail;
+				goto fail_dma_map;
 			}
 			rxq->pool_idx++;
 		}
@@ -892,7 +892,24 @@ setup_rxqs(device_t dev, struct netfront_info *info,
 
 fail_grant_ring:
 	free(rxq->ring.sring, M_DEVBUF);
+fail_dma_map:
+	/*
+	 * Clean up for the current queue, then call rxq_disconnect() for the
+	 * rest.
+	 *
+	 * XXX Adding another loop after the map creation loop that uses i
+	 * will break this.
+	 */
+	for (i--; i >= 0; i--) {
+		error = bus_dmamap_destroy(rxq->dmat, rxq->map_pool[i]);
+		KASSERT(error == 0, ("%s: destruction of map pool failed",
+		    __func__));
+	}
+	error = bus_dma_tag_destroy(rxq->dmat);
+	KASSERT(error == 0, ("%s: destruction of dma tag failed", __func__));
 fail:
+	destroy_rxq(rxq);
+	q--;
 	for (; q >= 0; q--) {
 		disconnect_rxq(&info->rxq[q]);
 		destroy_rxq(&info->rxq[q]);
@@ -1013,7 +1030,7 @@ setup_txqs(device_t dev, struct netfront_info *info,
 			    BUS_DMA_XEN_PREALLOC_REFS, &txq->map_pool[i]);
 			if (error) {
 				device_printf(dev, "Creating tx map failed\n");
-				goto fail;
+				goto fail_dma_map;
 			}
 			txq->pool_idx++;
 		}
@@ -1066,7 +1083,24 @@ fail_start_thread:
 	gnttab_end_foreign_access(txq->ring_ref, NULL);
 fail_grant_ring:
 	free(txq->ring.sring, M_DEVBUF);
+fail_dma_map:
+	/*
+	 * Clean up for the current queue, then call txq_disconnect() for the
+	 * rest.
+	 *
+	 * XXX Adding another loop after the map creation loop that uses i
+	 * will break this.
+	 */
+	for (i--; i >= 0; i--) {
+		error = bus_dmamap_destroy(txq->dmat, txq->map_pool[i]);
+		KASSERT(error == 0, ("%s: destruction of map pool failed",
+		    __func__));
+	}
+	error = bus_dma_tag_destroy(txq->dmat);
+	KASSERT(error == 0, ("%s: destruction of dma tag failed", __func__));
 fail:
+	destroy_txq(txq);
+	q--;
 	for (; q >= 0; q--) {
 		disconnect_txq(&info->txq[q]);
 		destroy_txq(&info->txq[q]);

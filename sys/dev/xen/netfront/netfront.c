@@ -908,7 +908,6 @@ fail_dma_map:
 	error = bus_dma_tag_destroy(rxq->dmat);
 	KASSERT(error == 0, ("%s: destruction of dma tag failed", __func__));
 fail:
-	destroy_rxq(rxq);
 	q--;
 	for (; q >= 0; q--) {
 		disconnect_rxq(&info->rxq[q]);
@@ -1099,7 +1098,6 @@ fail_dma_map:
 	error = bus_dma_tag_destroy(txq->dmat);
 	KASSERT(error == 0, ("%s: destruction of dma tag failed", __func__));
 fail:
-	destroy_txq(txq);
 	q--;
 	for (; q >= 0; q--) {
 		disconnect_txq(&info->txq[q]);

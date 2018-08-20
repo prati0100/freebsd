@@ -1168,39 +1168,6 @@ xbd_initialize(struct xbd_softc *sc)
 	xenbus_set_state(sc->xbd_dev, XenbusStateInitialised);
 }
 
-static void
-xbd_lockfunc(void *arg, bus_dma_lock_op_t op)
-{
-	struct xbd_softc *sc;
-	struct mtx *dmtx;
-
-	sc = (struct xbd_softc *)arg;
-	dmtx = &sc->xbd_io_lock;
-
-	/*
-	 * It is possible that when an unload is going on, and grant refs are
-	 * being freed up, a grant table free callback is received because
-	 * an ample amount of grant refs was made available. In that case, the
-	 * current thread already holds xbd_io_lock. So, don't acquire it, just
-	 * increase the refcount on it.
-	 */
-	switch (op) {
-	case BUS_DMA_LOCK:
-		sc->xbd_io_lock_refcount++;
-		if (!mtx_owned(dmtx)) {
-			mtx_lock(dmtx);
-		}
-		break;
-	case BUS_DMA_UNLOCK:
-		sc->xbd_io_lock_refcount--;
-		if (sc->xbd_io_lock_refcount == 0) {
-			mtx_unlock(dmtx);
-		}
-		break;
-	default:
-		panic("Unknown operation 0x%x for busdma_lock_mutex!", op);
-	}
-}
 
 /*
  * Callback received from the dma load when xbd_connect() loads the indirection
@@ -1315,8 +1282,8 @@ xbd_connect(struct xbd_softc *sc)
 	    sc->xbd_max_request_segments,
 	    PAGE_SIZE,				/* maxsegsize */
 	    flags,				/* flags */
-	    xbd_lockfunc,			/* lockfunc */
-	    sc,					/* lockarg */
+	    busdma_lock_mutex,			/* lockfunc */
+	    &sc->xbd_io_lock,			/* lockarg */
 	    &sc->xbd_io_dmat);
 	if (err != 0) {
 		xenbus_dev_fatal(sc->xbd_dev, err,
@@ -1503,7 +1470,6 @@ xbd_attach(device_t dev)
 
 	sc = device_get_softc(dev);
 	mtx_init(&sc->xbd_io_lock, "blkfront i/o lock", NULL, MTX_DEF);
-	sc->xbd_io_lock_refcount = 0;
 	xbd_initqs(sc);
 	for (i = 0; i < XBD_MAX_RING_PAGES; i++)
 		sc->xbd_ring_ref[i] = GRANT_REF_INVALID;

@@ -197,7 +197,6 @@ struct xbd_softc {
 	 */
 	int				 xbd_users;
 	struct mtx			 xbd_io_lock;
-	int				 xbd_io_lock_refcount;
 
 	struct xbd_command		*xbd_shadow;
 };

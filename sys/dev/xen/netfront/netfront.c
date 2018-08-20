@@ -2508,6 +2508,7 @@ netfront_detach(device_t dev)
 static void
 netif_free(struct netfront_info *np)
 {
+
 	XN_LOCK(np);
 	xn_stop(np);
 	XN_UNLOCK(np);

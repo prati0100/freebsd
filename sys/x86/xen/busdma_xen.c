@@ -68,7 +68,7 @@ struct bus_dmamap_xen {
 
 	/* Flags. */
 	bool 				 sleepable;
-	bool				 preallocated;
+	bool				 grefs_preallocated;
 	bool				 loaded;
 	unsigned int 			 gnttab_flags;
 };
@@ -261,7 +261,7 @@ xen_bus_dmamap_create(bus_dma_tag_t dmat, int flags, bus_dmamap_t *mapp)
 			    gnttab_claim_grant_reference(&gref_head);
 		}
 
-		xenmap->preallocated = true;
+		xenmap->grefs_preallocated = true;
 	}
 
 	*mapp = (bus_dmamap_t)xenmap;
@@ -291,7 +291,7 @@ xen_bus_dmamap_destroy(bus_dma_tag_t dmat, bus_dmamap_t map)
 	 * If the grant references were pre-allocated on map creation, we need
 	 * to clean them up here. If not, unload has cleaned them up already.
 	 */
-	if (xenmap->preallocated) {
+	if (xenmap->grefs_preallocated) {
 		gnttab_end_foreign_access_references(xentag->max_segments,
 		    xenmap->refs);
 
@@ -460,7 +460,7 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 	}
 
 	/* The grant refs were allocated on map creation. */
-	if (xenmap->preallocated) {
+	if (xenmap->grefs_preallocated) {
 		return (0);
 	}
 
@@ -762,7 +762,7 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 	 * xen_bus_dmamap_destroy() will clean them up, don't do it here. Just
 	 * end foreign access.
 	 */
-	if (xenmap->preallocated) {
+	if (xenmap->grefs_preallocated) {
 		for (i = 0; i < xenmap->nrefs; i++) {
 			gnttab_end_foreign_access_ref(xenmap->refs[i]);
 		}

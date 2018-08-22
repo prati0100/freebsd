@@ -37,7 +37,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/smp.h>
 #include <sys/limits.h>
 #include <sys/vmmeter.h>
-#include <sys/ktr.h>
 
 #include <vm/vm.h>
 #include <vm/vm_page.h>
@@ -155,9 +154,7 @@ xenpv_get_dma_tag(device_t bus, device_t child)
 	parent = bus_get_dma_tag(bus);
 
 	newtag = xen_get_dma_tag(parent);
-	if (newtag == NULL) {
-		CTR1(KTR_BUSDMA, "xenpv: %s: newtag is NULL", __func__);
-	}
+	KASSERT(newtag != NULL, ("%s: Failed to create Xen DMA tag", __func__));
 
 	return (newtag);
 }

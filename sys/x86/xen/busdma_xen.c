@@ -357,17 +357,14 @@ xen_gnttab_free_callback(void *arg)
 {
 	struct bus_dmamap_xen *xenmap;
 	struct bus_dma_tag_xen *xentag;
-	grant_ref_t gref_head, *refs;
+	grant_ref_t gref_head;
 	bus_dma_segment_t *segs;
 	bus_dmamap_callback_t *callback;
-	domid_t domid;
 	int error;
 	unsigned int i;
 
 	xenmap = arg;
 	xentag = xenmap->tag;
-	refs = xenmap->refs;
-	domid = xentag->domid;
 	callback = xenmap->callback;
 
 	error = gnttab_alloc_grant_references(xenmap->nrefs, &gref_head);
@@ -379,8 +376,8 @@ xen_gnttab_free_callback(void *arg)
 	    ("busdma_xen: %s: xenmap->temp_segs = NULL" , __func__));
 
 	for (i = 0; i < xenmap->nrefs; i++) {
-		refs[i] = gnttab_claim_grant_reference(&gref_head);
-		gnttab_grant_foreign_access_ref(refs[i], domid,
+		xenmap->refs[i] = gnttab_claim_grant_reference(&gref_head);
+		gnttab_grant_foreign_access_ref(xenmap->refs[i], xentag->domid,
 		    atop(segs[i].ds_addr), xenmap->gnttab_flags);
 	}
 
@@ -427,41 +424,20 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 
 	switch (op.type) {
 		case LOAD_MA:
-		{
-			struct vm_page **ma;
-			int ma_offs;
-
-			ma = op.ma.ma;
-			ma_offs = op.ma.ma_offs;
-
 			error = _bus_dmamap_load_ma(xentag->parent, xenmap->map,
-			     ma, op.size, ma_offs, op.flags, op.segs, op.segp);
+			     op.ma.ma, op.size, op.ma.ma_offs, op.flags,
+			     op.segs, op.segp);
 			break;
-		}
 		case LOAD_PHYS:
-		{
-			vm_paddr_t buf;
-
-			buf = op.phys.buf;
-
 			error = _bus_dmamap_load_phys(xentag->parent,
-			     xenmap->map, buf, op.size, op.flags, op.segs,
-			     op.segp);
+			     xenmap->map, op.phys.buf, op.size, op.flags,
+			     op.segs, op.segp);
 			break;
-		}
 		case LOAD_BUFFER:
-		{
-			void *buf;
-			struct pmap *pmap;
-
-			buf = op.buffer.buf;
-			pmap = op.buffer.pmap;
-
 			error = _bus_dmamap_load_buffer(xentag->parent,
-			    xenmap->map, buf, op.size, pmap, op.flags,
-			    op.segs, op.segp);
+			    xenmap->map, op.buffer.buf, op.size, op.buffer.pmap,
+			    op.flags, op.segs, op.segp);
 			break;
-		}
 		case NOLOAD:
 			error = 0;
 			break;
@@ -661,15 +637,12 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	struct bus_dma_tag_xen *xentag;
 	struct bus_dmamap_xen *xenmap;
 	bus_dmamap_callback_t *callback;
-	grant_ref_t *refs;
-	domid_t domid;
 	unsigned int i;
 	struct load_op op;
 
 	xenmap = callback_arg;
 	xentag = xenmap->tag;
 	callback = xenmap->callback;
-	domid = xentag->domid;
 
 	xenmap->nrefs = nseg;
 
@@ -711,10 +684,8 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	free(xenmap->temp_segs, M_BUSDMA_XEN);
 	xenmap->temp_segs = NULL;
 
-	refs = xenmap->refs;
-
 	for (i = 0; i < xenmap->nrefs; i++) {
-		gnttab_grant_foreign_access_ref(refs[i], domid,
+		gnttab_grant_foreign_access_ref(xenmap->refs[i], xentag->domid,
 		    atop(segs[i].ds_addr), xenmap->gnttab_flags);
 	}
 
@@ -752,14 +723,10 @@ xen_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
 {
 	struct bus_dma_tag_xen *xentag;
 	struct bus_dmamap_xen *xenmap;
-	grant_ref_t *refs;
-	domid_t domid;
 	unsigned int i;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	xenmap = (struct bus_dmamap_xen *)map;
-	refs = xenmap->refs;
-	domid = xentag->domid;
 
 	segs = _bus_dmamap_complete(xentag->parent, xenmap->map, segs, nsegs,
 	    error);
@@ -770,7 +737,7 @@ xen_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
 	}
 
 	for (i = 0; i < xenmap->nrefs; i++) {
-		gnttab_grant_foreign_access_ref(refs[i], domid,
+		gnttab_grant_foreign_access_ref(xenmap->refs[i], xentag->domid,
 		    atop(segs[i].ds_addr), xenmap->gnttab_flags);
 	}
 
@@ -785,13 +752,10 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 {
 	struct bus_dma_tag_xen *xentag;
 	struct bus_dmamap_xen *xenmap;
-	grant_ref_t *refs;
 	unsigned int i;
 
 	xentag = (struct bus_dma_tag_xen *)dmat;
 	xenmap = (struct bus_dmamap_xen *)map;
-
-	refs = xenmap->refs;
 
 	/*
 	 * If the grant references were pre-allocated on map creation,

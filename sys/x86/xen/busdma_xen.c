@@ -145,7 +145,6 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	    boundary, lowaddr, highaddr, filtfunc, filtfuncarg, maxsize,
 	    nsegments, maxsegsz, flags, lockfunc, lockfuncarg,
 	    sizeof(struct bus_dma_tag_xen), (void **)&newtag);
-
 	if (error) {
 		return (error);
 	}
@@ -422,7 +421,7 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 
 	/*
 	 * segp contains the starting segment on entrace, and the ending segment
-	 *  on exit. We can use it to calculate how many segments the map uses.
+	 * on exit. We can use it to calculate how many segments the map uses.
 	 */
 	segcount = *op.segp;
 

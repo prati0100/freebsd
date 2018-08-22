@@ -113,7 +113,7 @@ xen_bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	bus_dma_tag_t newparent, oldparent;
 	int error;
 
-	if (maxsegsz < PAGE_SIZE) {
+	if (maxsegsz > PAGE_SIZE) {
 		return (EINVAL);
 	}
 

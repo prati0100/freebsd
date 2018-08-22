@@ -70,7 +70,7 @@ struct bus_dmamap_xen {
 	bool 				 sleepable;
 	bool				 preallocated;
 	bool				 loaded;
-	int 				 gnttab_flags;
+	unsigned int 			 gnttab_flags;
 };
 
 struct load_op {

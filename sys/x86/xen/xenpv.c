@@ -173,7 +173,7 @@ static device_method_t xenpv_methods[] = {
 	DEVMETHOD(bus_release_resource,		bus_generic_release_resource),
 	DEVMETHOD(bus_activate_resource,	bus_generic_activate_resource),
 	DEVMETHOD(bus_deactivate_resource,	bus_generic_deactivate_resource),
-	DEVMETHOD(bus_get_dma_tag,			xenpv_get_dma_tag),
+	DEVMETHOD(bus_get_dma_tag,		xenpv_get_dma_tag),
 
 	/* Interface to allocate memory for foreign mappings */
 	DEVMETHOD(xenmem_alloc,			xenpv_alloc_physmem),

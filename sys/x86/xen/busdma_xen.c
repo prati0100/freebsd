@@ -814,7 +814,7 @@ xen_get_dma_tag(bus_dma_tag_t parent)
 	    NULL, NULL,				/* filtfunc, filtfuncarg */
 	    maxaddr,				/* maxsize */
 	    BUS_SPACE_UNRESTRICTED,		/* nsegments */
-	    maxaddr,				/* maxsegsz */
+	    PAGE_SIZE,				/* maxsegsz */
 	    BUSDMA_XEN_TAG_INIT,		/* flags */
 	    NULL, NULL,				/* lockfunc, lockfuncarg */
 	    &newtag);

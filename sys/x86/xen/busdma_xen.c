@@ -78,7 +78,6 @@ struct load_op {
 		LOAD_MA,
 		LOAD_PHYS,
 		LOAD_BUFFER,
-		NOLOAD
 	} type;
 	bus_size_t size;
 	int flags;
@@ -395,81 +394,22 @@ xen_gnttab_free_callback(void *arg)
 	return;
 }
 
-/* An internal function that is a helper for the three load variants. */
 static int
-xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
-    struct load_op op)
+xen_dmamap_alloc_refs(struct bus_dmamap_xen *xenmap)
 {
-	int error, segcount;
+	int error;
 	unsigned int i;
 	/* The head of the grant ref list used for batch allocating the refs. */
 	grant_ref_t gref_head;
 	bus_dma_segment_t *segs;
+	struct bus_dma_tag_xen *xentag;
 
-	KASSERT(xenmap != NULL, ("%s: Load called on a NULL map", __func__));
+	xentag = xenmap->tag;
 
-	xenmap->gnttab_flags = op.flags >> BUS_DMA_XEN_GNTTAB_FLAGS_SHIFT;
-	op.flags &= 0xFFFF;
-
-	if (xenmap->loaded) {
-		panic("%s: Load called on an already loaded map. "
-		    "It is not supported yet.", __func__);
-	}
-
-	/*
-	 * segp contains the starting segment on entrace, and the ending segment
-	 * on exit. We can use it to calculate how many segments the map uses.
-	 */
-	segcount = *op.segp;
-
-	switch (op.type) {
-		case LOAD_MA:
-			error = _bus_dmamap_load_ma(xentag->parent, xenmap->map,
-			     op.ma.ma, op.size, op.ma.ma_offs, op.flags,
-			     op.segs, op.segp);
-			break;
-		case LOAD_PHYS:
-			error = _bus_dmamap_load_phys(xentag->parent,
-			     xenmap->map, op.phys.buf, op.size, op.flags,
-			     op.segs, op.segp);
-			break;
-		case LOAD_BUFFER:
-			error = _bus_dmamap_load_buffer(xentag->parent,
-			    xenmap->map, op.buffer.buf, op.size, op.buffer.pmap,
-			    op.flags, op.segs, op.segp);
-			break;
-		case NOLOAD:
-			error = 0;
-			break;
-	}
-
-	if (error == EINPROGRESS) {
-		return (error);
-	}
-	if (error != 0) {
-		goto err;
-	}
-
-	if (op.type != NOLOAD) {
-		segcount = *op.segp - segcount;
-		xenmap->nrefs = segcount;
-
-		KASSERT(segcount <= xentag->max_segments, ("busdma_xen: "
-		    "segcount too large: segcount = %d, xentag->max_segments = "
-		    "%d", segcount,xentag->max_segments));
-	}
-
-	/* The grant refs were allocated on map creation. */
-	if (xenmap->grefs_preallocated) {
-		xenmap->loaded = true;
-		return (0);
-	}
-
-	xenmap->refs = malloc(xenmap->nrefs*sizeof(grant_ref_t),
+	xenmap->refs = malloc(xenmap->nrefs * sizeof(grant_ref_t),
 	    M_BUSDMA_XEN, M_NOWAIT);
 	if (xenmap->refs == NULL) {
-		error = ENOMEM;
-		goto err;
+		return (ENOMEM);
 	}
 
 	error = gnttab_alloc_grant_references(xenmap->nrefs, &gref_head);
@@ -477,7 +417,7 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 		if (!xenmap->sleepable) {
 			free(xenmap->refs, M_BUSDMA_XEN);
 			xenmap->refs = NULL;
-			goto err;
+			return (error);
 		}
 
 		/*
@@ -512,8 +452,7 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 			if (xenmap->temp_segs == NULL) {
 				free(xenmap->refs, M_BUSDMA_XEN);
 				xenmap->refs = NULL;
-				error = ENOMEM;
-				goto err;
+				return (ENOMEM);
 			}
 
 			/*
@@ -543,6 +482,74 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 	/* Claim the grant references allocated and store in the refs array. */
 	for (i = 0; i < xenmap->nrefs; i++) {
 		xenmap->refs[i] = gnttab_claim_grant_reference(&gref_head);
+	}
+
+	return (0);
+}
+
+/* An internal function that is a helper for the three load variants. */
+static int
+xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
+    struct load_op op)
+{
+	int error, segcount;
+
+	KASSERT(xenmap != NULL, ("%s: Load called on a NULL map", __func__));
+
+	xenmap->gnttab_flags = op.flags >> BUS_DMA_XEN_GNTTAB_FLAGS_SHIFT;
+	op.flags &= 0xFFFF;
+
+	if (xenmap->loaded) {
+		panic("%s: Load called on an already loaded map. "
+		    "It is not supported yet.", __func__);
+	}
+
+	/*
+	 * segp contains the starting segment on entrace, and the ending segment
+	 * on exit. We can use it to calculate how many segments the map uses.
+	 */
+	segcount = *op.segp;
+
+	switch (op.type) {
+		case LOAD_MA:
+			error = _bus_dmamap_load_ma(xentag->parent, xenmap->map,
+			     op.ma.ma, op.size, op.ma.ma_offs, op.flags,
+			     op.segs, op.segp);
+			break;
+		case LOAD_PHYS:
+			error = _bus_dmamap_load_phys(xentag->parent,
+			     xenmap->map, op.phys.buf, op.size, op.flags,
+			     op.segs, op.segp);
+			break;
+		case LOAD_BUFFER:
+			error = _bus_dmamap_load_buffer(xentag->parent,
+			    xenmap->map, op.buffer.buf, op.size, op.buffer.pmap,
+			    op.flags, op.segs, op.segp);
+			break;
+	}
+
+	if (error == EINPROGRESS) {
+		return (error);
+	}
+	if (error != 0) {
+		goto err;
+	}
+
+	segcount = *op.segp - segcount;
+	xenmap->nrefs = segcount;
+	KASSERT(segcount <= xentag->max_segments, ("busdma_xen: "
+	    "segcount too large: segcount = %d, xentag->max_segments = "
+	    "%d", segcount,xentag->max_segments));
+
+	/* The grant refs were allocated on map creation. */
+	if (xenmap->grefs_preallocated) {
+		xenmap->loaded = true;
+		return (0);
+	}
+
+	error = xen_dmamap_alloc_refs(xenmap);
+	if (error) {
+		goto err;
 	}
 
 	xenmap->loaded = true;
@@ -639,7 +646,6 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	struct bus_dmamap_xen *xenmap;
 	bus_dmamap_callback_t *callback;
 	unsigned int i;
-	struct load_op op;
 
 	xenmap = callback_arg;
 	xentag = xenmap->tag;
@@ -668,9 +674,7 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 		xenmap->temp_segs[i] = segs[i];
 	}
 
-	op.type = NOLOAD;
-
-	error = xen_load_helper(xenmap->tag, xenmap, op);
+	error = xen_dmamap_alloc_refs(xenmap);
 	if (error == EINPROGRESS) {
 		return;
 	}

@@ -461,6 +461,7 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 
 	/* The grant refs were allocated on map creation. */
 	if (xenmap->grefs_preallocated) {
+		xenmap->loaded = true;
 		return (0);
 	}
 

@@ -667,14 +667,12 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	xenmap->nrefs = nseg;
 
 	if (error) {
-		(*callback)(xenmap->callback_arg, segs, nseg, error);
-		return;
+		goto err;
 	}
 
 	error = xen_dmamap_setup_temp_segs(xenmap, segs);
 	if (error) {
-		(*callback)(xenmap->callback_arg, segs, nseg, error);
-		return;
+		goto err;
 	}
 
 	error = xen_dmamap_alloc_refs(xenmap);
@@ -684,8 +682,7 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	if (error != 0){
 		free(xenmap->temp_segs, M_BUSDMA_XEN);
 		xenmap->temp_segs = NULL;
-		(*callback)(xenmap->callback_arg, segs, nseg, error);
-		return;
+		goto err;
 	}
 
 	/* We don't need temp_segs any more. */
@@ -698,6 +695,12 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	}
 
 	(*callback)(xenmap->callback_arg, segs, nseg, 0);
+	return;
+
+err:
+	KASSERT(error != 0, ("%s: In error handling section, but error is 0"
+	    __func__));
+	(*callback)(xenmap->callback_arg, segs, nseg, error);
 }
 
 static void

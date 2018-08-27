@@ -394,6 +394,37 @@ xen_gnttab_free_callback(void *arg)
 	return;
 }
 
+/*
+ * This dance with temp_segs warrants a detailed explanation. The segs returned
+ * by map_complete() array would get over-written when another load on the same
+ * tag is called. The scope of the segs array is limited to the callback
+ * provided to the load of the parent (xen_dmamap_callback in this case). After
+ * that, it can be over-written. So, we need to make a backup of it before we
+ * wait for grant references, because it is possible that by the time the grant
+ * table callback is received, the segs array has already been over-written.
+ */
+static inline int
+xen_dmamap_setup_temp_segs(struct bus_dmamap_xen *xenmap,
+    bus_dma_segment_t *segs)
+{
+	unsigned int i;
+
+	KASSERT(xenmap->temp_segs == NULL, "%s: temp_segs already set-up",
+	    __func__);
+
+	xenmap->temp_segs = malloc(xenmap->nrefs * sizeof(bus_dma_segment_t),
+	    M_BUSDMA_XEN, M_NOWAIT);
+	if (xenmap->temp_segs == NULL) {
+		return (ENOMEM);
+	}
+
+	for (i = 0; i < xenmap->nrefs; i++) {
+		xenmap->temp_segs[i] = segs[i];
+	}
+
+	return (0);
+}
+
 static int
 xen_dmamap_alloc_refs(struct bus_dmamap_xen *xenmap)
 {
@@ -421,50 +452,32 @@ xen_dmamap_alloc_refs(struct bus_dmamap_xen *xenmap)
 		}
 
 		/*
-		 * This dance with temp_segs warrants a detailed explanation.
-		 * The segs returned by map_complete() array would get
-		 * over-written when another load on the same tag is called. The
-		 * scope of the segs array is limited to the callback provided
-		 * to the load of the parent (xen_dmamap_callback in this case).
-		 * After that, it can be over-written. So, we need to make a
-		 * backup of it before we wait for grant references, because it
-		 * is possible that by the time the grant table callback is
-		 * received, the segs array has already been over-written.
-		 *
 		 * The reason for the NULL check is that we can get here from
-		 * two places: xen_dmamap_callback() or one of the loads.
-		 * When we are coming from the xen_dmamap_callback(), it means
-		 * the load was deferred, and then the callback was called.
-		 * xen_dmamap_callback() creates a copy of the segs array before
-		 * calling the load helper, so no need to copy the segs array,
-		 * it has already been done. The reason we don't call
-		 * map_complete() in both cases is because map_complete() for
-		 * the map was already called before xen_dmamap_callback() was
-		 * called. We should not call map_complete() twice. It wouldn't
-		 * be a problem for the current implementation of busdma_bounce,
+		 * two places: xen_dmamap_callback() or one of the loads. When
+		 * we are coming from the xen_dmamap_callback(), it means the
+		 * load was deferred, and then the callback was called.
+		 * xen_dmamap_callback() sets up temp_segs before calling this
+		 * function, so no need to copy the segs array, it has already
+		 * been done. The reason we don't simply call map_complete()
+		 * in both cases is because map_complete() for the map was
+		 * already called before xen_dmamap_callback() was called. We
+		 * should not call map_complete() twice. It wouldn't be a
+		 * problem for the current implementation of busdma_bounce,
 		 * but it is not a good thing to assume things about the
 		 * implementation details of an interface.
 		 */
-
 		if (xenmap->temp_segs == NULL) {
-			xenmap->temp_segs = malloc(xenmap->nrefs *
-			    sizeof(bus_dma_segment_t), M_BUSDMA_XEN, M_NOWAIT);
-			if (xenmap->temp_segs == NULL) {
-				free(xenmap->refs, M_BUSDMA_XEN);
-				xenmap->refs = NULL;
-				return (ENOMEM);
-			}
-
 			/*
 			 * Complete the parent's load cycle by calling
 			 * map_complete.
 			 */
-			segs = _bus_dmamap_complete(xentag->parent,
-			    xenmap->map, NULL, xenmap->nrefs, 0);
+			segs = _bus_dmamap_complete(xentag->parent, xenmap->map,
+			    NULL, xenmap->nrefs, 0);
 
 			/* Save a copy of the segs array, we need it later. */
-			for (i = 0; i < xenmap->nrefs; i++) {
-				xenmap->temp_segs[i] = segs[i];
+			error = xenmap_setup_temp_segs(xenmap, segs);
+			if (error) {
+				return (error);
 			}
 		}
 
@@ -658,20 +671,10 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 		return;
 	}
 
-	/*
-	 * Save a copy of the segs array. This may get over-written when another
-	 * load on the same tag is called. For a more detailed explaination,
-	 * check the comment in xen_load_helper().
-	 */
-	xenmap->temp_segs = malloc(nseg * sizeof(bus_dma_segment_t),
-	    M_BUSDMA_XEN, M_NOWAIT);
-	if (xenmap->temp_segs == NULL) {
-		(*callback)(xenmap->callback_arg, segs, nseg, (ENOMEM));
+	error = xen_dmamap_setup_temp_segs(xenmap, segs);
+	if (error) {
+		(*callback)(xenmap->callback_arg, segs, nseg, error);
 		return;
-	}
-
-	for (i = 0; i < xenmap->nrefs; i++) {
-		xenmap->temp_segs[i] = segs[i];
 	}
 
 	error = xen_dmamap_alloc_refs(xenmap);

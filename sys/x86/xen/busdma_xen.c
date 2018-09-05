@@ -44,7 +44,14 @@ __FBSDID("$FreeBSD$");
 
 MALLOC_DEFINE(M_BUSDMA_XEN, "busdma_xen_buf", "Xen-specific bus_dma(9) buffer");
 
-/* BUS_DMA_BUS1 is reserved for bus functions to use as they wish. */
+/*
+ * BUS_DMA_BUS1 is reserved for bus functions to use as they wish. Here, it is
+ * used by xen_get_dma_tag() to tell xen_bus_dma_tag_create() that the
+ * Xen-specific tag has to be "bootstrapped". xen_get_dma_tag() passes the
+ * machine-specific tag not the Xen tag (which tag_create() expects in the
+ * usual case), so it has to be handled differently. This is what
+ * "bootstrapping" means.
+ */
 #define BUSDMA_XEN_TAG_INIT BUS_DMA_BUS1
 
 struct bus_dma_tag_xen {

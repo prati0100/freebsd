@@ -76,7 +76,6 @@ struct bus_dmamap_xen {
 	/* Flags. */
 	bool				 sleepable;
 	bool				 grefs_preallocated;
-	bool				 loaded;
 	unsigned int			 gnttab_flags;
 };
 
@@ -387,8 +386,6 @@ xen_gnttab_free_callback(void *arg)
 		    atop(segs[i].ds_addr), xenmap->gnttab_flags);
 	}
 
-	xenmap->loaded = true;
-
 	xentag->common.lockfunc(xentag->common.lockfuncarg, BUS_DMA_LOCK);
 	(*callback)(xenmap->callback_arg, segs, xenmap->nrefs, 0);
 	xentag->common.lockfunc(xentag->common.lockfuncarg,
@@ -433,7 +430,7 @@ xen_dmamap_setup_temp_segs(struct bus_dmamap_xen *xenmap,
 }
 
 static int
-xen_dmamap_alloc_refs(struct bus_dmamap_xen *xenmap)
+xen_dmamap_alloc_refs(struct bus_dmamap_xen *xenmap, unsigned int nrefs)
 {
 	int error;
 	unsigned int i;
@@ -444,19 +441,29 @@ xen_dmamap_alloc_refs(struct bus_dmamap_xen *xenmap)
 
 	xentag = xenmap->tag;
 
-	xenmap->refs = malloc(xenmap->nrefs * sizeof(grant_ref_t),
-	    M_BUSDMA_XEN, M_NOWAIT);
 	if (xenmap->refs == NULL) {
-		return (ENOMEM);
+		xenmap->refs = malloc(xentag->max_segments *
+		    sizeof(grant_ref_t), M_BUSDMA_XEN, M_NOWAIT);
+		if (xenmap->refs == NULL) {
+			return (ENOMEM);
+		}
 	}
 
-	error = gnttab_alloc_grant_references(xenmap->nrefs, &gref_head);
+	error = gnttab_alloc_grant_references(nrefs, &gref_head);
 	if (error) {
 		if (!xenmap->sleepable) {
+			gnttab_end_foreign_access_references(xenmap->nrefs,
+			    xenmap->refs);
 			free(xenmap->refs, M_BUSDMA_XEN);
 			xenmap->refs = NULL;
 			return (error);
 		}
+
+		/*
+		 * We need to update the value of nrefs before waiting, because
+		 * xen_gnttab_free_callback() expects the updated value.
+		 */
+		xenmap->nrefs += nrefs;
 
 		/*
 		 * The reason for the NULL check is that we can get here from
@@ -500,7 +507,7 @@ xen_dmamap_alloc_refs(struct bus_dmamap_xen *xenmap)
 	}
 
 	/* Claim the grant references allocated and store in the refs array. */
-	for (i = 0; i < xenmap->nrefs; i++) {
+	for (i = xenmap->nrefs; i < xenmap->nrefs + nrefs; i++) {
 		xenmap->refs[i] = gnttab_claim_grant_reference(&gref_head);
 	}
 
@@ -518,11 +525,6 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 
 	xenmap->gnttab_flags = op.flags >> BUS_DMA_XEN_GNTTAB_FLAGS_SHIFT;
 	op.flags &= 0xFFFF;
-
-	if (xenmap->loaded) {
-		panic("%s: Load called on an already loaded map. "
-		    "It is not supported yet.", __func__);
-	}
 
 	/*
 	 * segp contains the starting segment on entrace, and the ending segment
@@ -556,25 +558,24 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 	}
 
 	segcount = *op.segp - segcount;
-	xenmap->nrefs = segcount;
-	KASSERT(segcount <= xentag->max_segments, ("busdma_xen: "
-	    "segcount too large: segcount = %d, xentag->max_segments = "
-	    "%d", segcount, xentag->max_segments));
+	KASSERT(xenmap->nrefs + segcount <= xentag->max_segments, ("busdma_xen:"
+	    " segcount too large: segcount = %d, xentag->max_segments = %d",
+	    segcount, xentag->max_segments));
 
 	/* The grant refs were allocated on map creation. */
 	if (xenmap->grefs_preallocated) {
-		xenmap->loaded = true;
+		xenmap->nrefs += segcount;
 		return (0);
 	}
 
-	error = xen_dmamap_alloc_refs(xenmap);
+	error = xen_dmamap_alloc_refs(xenmap, segcount);
 	if (error == EINPROGRESS) {
 		return (EINPROGRESS);
 	} else if (error != 0) {
 		goto err;
 	}
 
-	xenmap->loaded = true;
+	xenmap->nrefs += segcount;
 
 	return (0);
 
@@ -684,7 +685,7 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 		goto err;
 	}
 
-	error = xen_dmamap_alloc_refs(xenmap);
+	error = xen_dmamap_alloc_refs(xenmap, xenmap->nrefs);
 	if (error == EINPROGRESS) {
 		return;
 	}
@@ -798,7 +799,6 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 
 	/* Reset the flags. */
 	xenmap->sleepable = false;
-	xenmap->loaded = false;
 
 	KASSERT(xenmap->temp_segs == NULL,
 	    ("busdma_xen: %s: xenmap->temp_segs not NULL.", __func__));

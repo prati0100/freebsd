@@ -559,7 +559,7 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 	xenmap->nrefs = segcount;
 	KASSERT(segcount <= xentag->max_segments, ("busdma_xen: "
 	    "segcount too large: segcount = %d, xentag->max_segments = "
-	    "%d", segcount,xentag->max_segments));
+	    "%d", segcount, xentag->max_segments));
 
 	/* The grant refs were allocated on map creation. */
 	if (xenmap->grefs_preallocated) {

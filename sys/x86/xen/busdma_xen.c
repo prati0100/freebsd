@@ -571,7 +571,8 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 	error = xen_dmamap_alloc_refs(xenmap, segcount);
 	if (error == EINPROGRESS) {
 		return (EINPROGRESS);
-	} else if (error != 0) {
+	}
+	if (error != 0) {
 		goto err;
 	}
 

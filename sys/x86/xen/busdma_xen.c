@@ -533,21 +533,20 @@ xen_load_helper(struct bus_dma_tag_xen *xentag, struct bus_dmamap_xen *xenmap,
 	segcount = *op.segp;
 
 	switch (op.type) {
-		case LOAD_MA:
-			error = _bus_dmamap_load_ma(xentag->parent, xenmap->map,
-			     op.ma.ma, op.size, op.ma.ma_offs, op.flags,
-			     op.segs, op.segp);
-			break;
-		case LOAD_PHYS:
-			error = _bus_dmamap_load_phys(xentag->parent,
-			     xenmap->map, op.phys.buf, op.size, op.flags,
-			     op.segs, op.segp);
-			break;
-		case LOAD_BUFFER:
-			error = _bus_dmamap_load_buffer(xentag->parent,
-			    xenmap->map, op.buffer.buf, op.size, op.buffer.pmap,
-			    op.flags, op.segs, op.segp);
-			break;
+	case LOAD_MA:
+		error = _bus_dmamap_load_ma(xentag->parent, xenmap->map,
+		    op.ma.ma, op.size, op.ma.ma_offs, op.flags, op.segs,
+		    op.segp);
+		break;
+	case LOAD_PHYS:
+		error = _bus_dmamap_load_phys(xentag->parent, xenmap->map,
+		    op.phys.buf, op.size, op.flags, op.segs, op.segp);
+		break;
+	case LOAD_BUFFER:
+		error = _bus_dmamap_load_buffer(xentag->parent, xenmap->map,
+		    op.buffer.buf, op.size, op.buffer.pmap, op.flags, op.segs,
+		    op.segp);
+		break;
 	}
 
 	if (error == EINPROGRESS) {

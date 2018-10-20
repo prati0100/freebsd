@@ -357,6 +357,16 @@ xen_bus_dmamem_free(bus_dma_tag_t dmat, void *vaddr, bus_dmamap_t map)
 	free(xenmap, M_BUSDMA_XEN);
 }
 
+/*
+ * XXX This will break when multiple loads are called on the same map and one of
+ * the loads (which is not the last) fails because of a shortage of grant refs.
+ * The reason is that there is no clean way to continue where we left off. Maybe
+ * calling bus_dmamap_load_mem() can work if we track all the memory segments
+ * already allocated by our map.
+ *
+ * More specifically, _bus_dmamap_load_vlist(), _bus_dmamap_load_plist() will
+ * break if a shortage of grant references occurs.
+ */
 static void
 xen_gnttab_free_callback(void *arg)
 {

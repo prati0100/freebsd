@@ -775,9 +775,11 @@ xen_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
 	return (segs);
 }
 
-/* XXX If the map is unloaded when the load has not completed, and allocation of
- * grant references has been defered, we might cause a segmentation fault by
- * accessing xenmap->refs. We will also leak grant refs. */
+/*
+ * XXX If the map is unloaded when the load has not completed, and allocation of
+ * grant references has been defered, this might cause a segmentation fault by
+ * accessing xenmap->refs. This will also leak grant refs.
+ */
 static void
 xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 {

@@ -1310,6 +1310,7 @@ xn_alloc_rx_buffers(struct netfront_rxq *rxq)
 
 		error = bus_dmamap_load(rxq->dmat, map, m->m_data,
 		    m->m_len, xn_dma_cb, rxq, BUS_DMA_NOWAIT);
+		KASSERT(error == 0, ("%s: map load failed", __func__));
 
 		ref = rxq->grant_ref[id] = xn_get_map_gref(map);
 
@@ -1865,6 +1866,7 @@ xn_assemble_tx_request(struct netfront_txq *txq, struct mbuf *m_head)
 		error = bus_dmamap_load(txq->dmat, map, m->m_data,
 		    m->m_len, xn_dma_cb, txq, BUS_DMA_XEN_RO |
 		    BUS_DMA_NOWAIT);
+		KASSERT(error == 0, ("%s: map load failed", __func__));
 
 		ref = txq->grant_ref[id] = xn_get_map_gref(map);
 
@@ -2147,6 +2149,7 @@ xn_rebuild_rx_bufs(struct netfront_rxq *rxq)
 
 		error = bus_dmamap_load(rxq->dmat, map, m->m_data,
 		    m->m_len, xn_dma_cb, rxq, BUS_DMA_NOWAIT);
+		KASSERT(error == 0, ("%s: map load failed", __func__));
 
 		ref = rxq->grant_ref[requeue_idx] = xn_get_map_gref(map);
 

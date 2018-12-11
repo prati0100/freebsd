@@ -423,8 +423,8 @@ xen_dmamap_setup_temp_segs(struct bus_dmamap_xen *xenmap,
 {
 	unsigned int i;
 
-	KASSERT(xenmap->temp_segs == NULL, "%s: temp_segs already set-up",
-	    __func__);
+	KASSERT(xenmap->temp_segs == NULL, ("%s: temp_segs already set-up",
+	    __func__));
 
 	xenmap->temp_segs = malloc(xenmap->nrefs * sizeof(bus_dma_segment_t),
 	    M_BUSDMA_XEN, M_NOWAIT);
@@ -499,7 +499,7 @@ xen_dmamap_alloc_refs(struct bus_dmamap_xen *xenmap, unsigned int nrefs)
 			    NULL, xenmap->nrefs, 0);
 
 			/* Save a copy of the segs array, we need it later. */
-			error = xenmap_setup_temp_segs(xenmap, segs);
+			error = xen_dmamap_setup_temp_segs(xenmap, segs);
 			if (error) {
 				return (error);
 			}
@@ -718,7 +718,7 @@ xen_dmamap_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	return;
 
 err:
-	KASSERT(error != 0, ("%s: In error handling section, but error is 0"
+	KASSERT(error != 0, ("%s: In error handling section, but error is 0",
 	    __func__));
 	(*callback)(xenmap->callback_arg, segs, nseg, error);
 }

@@ -25,6 +25,36 @@
  * SUCH DAMAGE.
  *
  * $FreeBSD$
+ *
+ * ****************************************************************************
+ * This is the interface of the Xen-specific bus_dma(9) implementation. This
+ * interface should be used by Xen device drivers that need to allocate and map
+ * grant references. The dma implementation takes care of all the bookkeeping
+ * needed, like extracting physical addresses from virtual pages, allocating
+ * the grant references, mapping them, waiting when there is a shortage of
+ * references, etc.
+ *
+ * Using the implementation:
+ *
+ * All the devices hanging off the xenpv bus have xen-specific dma tags. To use
+ * the implementation, create a dma tag (read the bus_dma(9) man page for
+ * details). When creating the tag, the domid of the other end has to be OR'd
+ * with the flags argument, left shifted by BUS_DMA_XEN_DOMID_SHIFT. See the
+ * #define below for more info.
+ *
+ * Once you have the tag, use bus_dmamap_load() to allocate a grant reference
+ * and grant foreign access to the page(s) specified in map_load()'s buf
+ * argument. The access is granted to the domid specified when creating the tag.
+ *
+ * Some flags can be passed to change the behavior; see the defines below for
+ * more info. If BUS_DMA_NOWAIT is not passed when loading, the load might be
+ * deferred in case there is a shortage of grant references. The semantics of
+ * deferred loads in the bus_dma(9) interface are used in this case.
+ *
+ * To free the reference, and to end foreign access, call bus_dmamap_unload().
+ *
+ * For example usage, check sys/dev/xen/netfront/netfront.c
+ * ****************************************************************************
  */
 
 #ifndef __XEN_BUSDMA_H

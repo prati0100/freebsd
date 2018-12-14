@@ -852,9 +852,9 @@ setup_rxqs(device_t dev, struct netfront_info *info,
 		    &rxq->dmat);
 
 		if (error) {
-    			device_printf(dev, "Creating tx tag failed\n");
-    			goto fail;
-    		}
+			device_printf(dev, "Creating tx tag failed\n");
+			goto fail;
+		}
 
 		for (i = 0; i <= NET_RX_RING_SIZE; i++) {
 			rxq->mbufs[i] = NULL;

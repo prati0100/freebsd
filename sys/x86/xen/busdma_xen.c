@@ -301,7 +301,7 @@ xen_bus_dmamap_destroy(bus_dma_tag_t dmat, bus_dmamap_t map)
 		    xenmap->refs);
 
 		free(xenmap->refs, M_BUSDMA_XEN);
-    		xenmap->refs = NULL;
+		xenmap->refs = NULL;
 	}
 
 	KASSERT(xenmap->refs == NULL,
@@ -804,7 +804,7 @@ xen_bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map)
 		    xenmap->refs);
 
 		free(xenmap->refs, M_BUSDMA_XEN);
-    		xenmap->refs = NULL;
+		xenmap->refs = NULL;
 	}
 
 	xenmap->nrefs = 0;

@@ -404,8 +404,6 @@ xen_gnttab_free_callback(void *arg)
 	/* We don't need the temp_segs array anymore. */
 	free(xenmap->temp_segs, M_BUSDMA_XEN);
 	xenmap->temp_segs = NULL;
-
-	return;
 }
 
 /*

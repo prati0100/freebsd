@@ -1183,7 +1183,7 @@ xbd_indirectpage_cb(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 
 	if (error) {
 		/* Disable indirection pages and continue. */
-		cm->cm_sc->xbd_max_request_segments = 0;
+		cm->cm_sc->xbd_max_request_indirectpages = 0;
 		cm->cm_indirectionpages = NULL;
 		return;
 	}
@@ -1192,7 +1192,7 @@ xbd_indirectpage_cb(void *callback_arg, bus_dma_segment_t *segs, int nseg,
 	    ("%s: number of dma segments not equal to the expected number. "
 	    "nseg = %d, xbd_max_request_segments = %d. Verify that the "
 	    "constraints passed when creating the tag are correct.", __func__,
-	    nseg, cm->cm_sc->xbd_max_request_segments));
+	    nseg, cm->cm_sc->xbd_max_request_indirectpages));
 
 	cm->cm_indirectionrefs = xen_dmamap_get_grefs(cm->cm_indirectionmap);
 }

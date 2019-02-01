@@ -117,7 +117,6 @@ struct xbd_command {
 	uint64_t		 cm_id;
 	grant_ref_t		*cm_sg_refs;
 	struct bio		*cm_bp;
-	grant_ref_t		 cm_gref_head;
 	void			*cm_data;
 	size_t			 cm_datalen;
 	u_int			 cm_nseg;
@@ -126,7 +125,8 @@ struct xbd_command {
 	int			 cm_status;
 	xbd_cbcf_t		*cm_complete;
 	void			*cm_indirectionpages;
-	grant_ref_t		 cm_indirectionrefs[BLKIF_MAX_INDIRECT_PAGES_PER_REQUEST];
+	grant_ref_t		*cm_indirectionrefs;
+	bus_dmamap_t		 cm_indirectionmap;
 };
 
 typedef enum {
